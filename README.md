@@ -22,10 +22,10 @@ Without protection, the AI will blindly follow the hacker's instructions, using 
 
 Installation takes less than 30 seconds and configures everything automatically.
 
-1. Download the `install_petze.py` script.
+1. Download the `petze_unified_installer.py` script.
 2. Run the installer in your terminal:
    ```bash
-   python3 install_petze.py
+   python3 petze_unified_installer.py
    ```
 3. Enter your assigned Beta API Key when prompted.
 4. Select which agents you want to protect (OpenCode, Claude Code, or Both).
