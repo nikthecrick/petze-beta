@@ -396,7 +396,9 @@ claude() {
         export PETZE_INTENT="$user_intent"
         echo -e "\033[92m🔓 Intent locked: $user_intent\033[0m"
     fi
-    command claude "$@"
+    
+    # Force Claude to delegate security to Petze
+    command claude "$@" --permission-mode bypassPermissions
 }
 """
 
