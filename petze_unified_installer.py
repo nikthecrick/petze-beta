@@ -41,12 +41,20 @@ os.makedirs(petze_dir, exist_ok=True)
 with open(os.path.join(petze_dir, "config.json"), "w") as f: 
     json.dump({"api_key": api_key}, f)
 
-# --- 3. THE PROXY ENGINE (AWS Sync, Fast-Path, DPI & Zero-Dependency) ---
+# --- 3. THE PROXY ENGINE (AWS Sync, Fast-Path, Bypass & Zero-Dependency) ---
 proxy_path = os.path.join(petze_dir, "petze_mcp_proxy.py")
 proxy_code = """#!/usr/bin/env python3
-import sys, os, json, subprocess, threading
+import sys, os, json, subprocess, threading, ssl
 import urllib.request, urllib.error
 from datetime import datetime
+
+# --- macOS SSL Fix ---
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
 
 TELEMETRY_FILE = os.path.expanduser("~/.openclaw/petze_telemetry.json")
 LOG_FILE = os.path.expanduser("~/.petze/activity.log")
@@ -108,11 +116,16 @@ def main():
                 cmd_str = f"Tool: {t_name} | Args: {t_args_str}"
                 log_ui(f"🔍 Intercepted: {t_name}")
                 
-                # --- FAST-PATH WHITELIST ---
                 SAFE_TOOLS = ["list_allowed_directories", "list_directory"]
                 
-                if t_name in SAFE_TOOLS:
+                # --- THE BYPASS SWITCH ---
+                if macro_intent == "BYPASS":
+                    is_safe, reason = True, "⚠️ Auto-approved: Petze firewall disabled for this session"
+                
+                # --- FAST-PATH WHITELIST ---
+                elif t_name in SAFE_TOOLS:
                     is_safe, reason = True, "Auto-approved: Safe context tool"
+                
                 else:
                     # --- DEEP PACKET INSPECTION (File Content Scanning) ---
                     if t_name in ["read_text_file", "read_file"]:
@@ -123,7 +136,7 @@ def main():
                                     content_preview = f.read(1500)
                                 cmd_str += f"\\n[FILE CONTENT PREVIEW]: {content_preview}..."
                         except Exception:
-                            pass # Fail gracefully, let AWS evaluate the path alone
+                            pass
 
                     # --- ZERO-DEPENDENCY AWS CLOUD CHECK ---
                     try:
@@ -284,7 +297,7 @@ with open(dash_path, "w") as f: f.write(dash_code)
 os.chmod(dash_path, os.stat(dash_path).st_mode | stat.S_IEXEC)
 print(f"{GREEN}✔ Built Dashboard CLI tool at {dash_path}{RESET}")
 
-# --- 5. OPENCODE SETUP ---
+# --- 5. OPENCODE SETUP (MiniMax Default) ---
 if agent_choice in ['1', '3']:
     opencode_dir = os.path.expanduser("~/.config/opencode")
     os.makedirs(opencode_dir, exist_ok=True)
@@ -304,13 +317,12 @@ if agent_choice in ['1', '3']:
     l_path = os.path.join(petze_dir, "petze-run")
     with open(l_path, "w") as f: f.write(launcher_code)
     os.chmod(l_path, os.stat(l_path).st_mode | stat.S_IEXEC)
-    print(f"{GREEN}✔ Configured OpenCode and created 'petze-run' wrapper{RESET}")
+    print(f"{GREEN}✔ Configured OpenCode with MiniMax and created 'petze-run' wrapper{RESET}")
 
 # --- 6. CLAUDE CODE SETUP ---
 if agent_choice in ['2', '3']:
     print(f"{YELLOW}Running Claude Code MCP registration...{RESET}")
     os.system(f'claude mcp add petze-filesystem python3 {proxy_path} npx -y @modelcontextprotocol/server-filesystem {desktop_dir} >/dev/null 2>&1')
-    os.system(f'claude mcp add petze-terminal python3 {proxy_path} npx -y @modelcontextprotocol/server-bash >/dev/null 2>&1')
     
     claude_dir = os.path.expanduser("~/.claude")
     os.makedirs(claude_dir, exist_ok=True)
@@ -333,7 +345,7 @@ if agent_choice in ['2', '3']:
     os.chmod(c_path, os.stat(c_path).st_mode | stat.S_IEXEC)
     print(f"{GREEN}✔ Configured Claude Code, blocked native tools, and created wrapper{RESET}")
 
-# --- 7. ALIAS & GLOBAL PROFILE INJECTION ---
+# --- 7. ALIAS & GLOBAL PROFILE INJECTION (Shell Hijack with Bypass) ---
 shell_path = os.environ.get("SHELL", "")
 is_zsh = "zsh" in shell_path
 rc_file = ".zshrc" if is_zsh else ".bashrc"
@@ -342,19 +354,66 @@ profile_file = ".zprofile" if is_zsh else ".bash_profile"
 rc_path = os.path.expanduser(f"~/{rc_file}")
 profile_path = os.path.expanduser(f"~/{profile_file}")
 
-# 7a. Write to rc file
+# 7a. Construct the injection payload
+shell_injection = "\n# --- PETZE GUARD GLOBAL COMMANDS ---\n"
+shell_injection += f'alias petze-dash="{os.path.join(petze_dir, "petze-dash")}"\n'
+
+if agent_choice in ['1', '3']:
+    shell_injection += f'alias petze-run="{os.path.join(petze_dir, "petze-run")}"\n'
+    shell_injection += r"""
+opencode() {
+    echo -e "\033[93m🛡️  Petze Guard: You launched OpenCode directly.\033[0m"
+    read -p "Define intent (Type 'OFF' to disable Petze, or Enter for read-only): " user_intent
+    
+    if [ "$user_intent" = "OFF" ] || [ "$user_intent" = "off" ]; then
+        export PETZE_INTENT="BYPASS"
+        echo -e "\033[91m⚠️  Petze Firewall DISABLED. Agent has unrestricted tool access.\033[0m"
+    elif [ -z "$user_intent" ]; then
+        export PETZE_INTENT="General safe read-only assistant."
+        echo -e "\033[90m🔒 Safe-mode activated.\033[0m"
+    else
+        export PETZE_INTENT="$user_intent"
+        echo -e "\033[92m🔓 Intent locked: $user_intent\033[0m"
+    fi
+    command opencode "$@"
+}
+"""
+
+if agent_choice in ['2', '3']:
+    shell_injection += f'alias petze-claude="{os.path.join(petze_dir, "petze-claude")}"\n'
+    shell_injection += r"""
+claude() {
+    echo -e "\033[93m🛡️  Petze Guard: You launched Claude directly.\033[0m"
+    read -p "Define intent (Type 'OFF' to disable Petze, or Enter for read-only): " user_intent
+    
+    if [ "$user_intent" = "OFF" ] || [ "$user_intent" = "off" ]; then
+        export PETZE_INTENT="BYPASS"
+        echo -e "\033[91m⚠️  Petze Firewall DISABLED. Agent has unrestricted tool access.\033[0m"
+    elif [ -z "$user_intent" ]; then
+        export PETZE_INTENT="General safe read-only assistant."
+        echo -e "\033[90m🔒 Safe-mode activated.\033[0m"
+    else
+        export PETZE_INTENT="$user_intent"
+        echo -e "\033[92m🔓 Intent locked: $user_intent\033[0m"
+    fi
+    command claude "$@"
+}
+"""
+
+# 7b. Write to rc file
 try:
     with open(rc_path, "r") as f: rc_content = f.read()
 except FileNotFoundError: rc_content = ""
 
-with open(rc_path, "a") as f:
-    if 'petze-run' not in rc_content and agent_choice in ['1', '3']: f.write(f'\nalias petze-run="{os.path.join(petze_dir, "petze-run")}"\n')
-    if 'petze-claude' not in rc_content and agent_choice in ['2', '3']: f.write(f'\nalias petze-claude="{os.path.join(petze_dir, "petze-claude")}"\n')
-    if 'petze-dash' not in rc_content: f.write(f'\nalias petze-dash="{os.path.join(petze_dir, "petze-dash")}"\n')
+# Check for our marker to avoid duplicate blocks if installer is run multiple times
+if "# --- PETZE GUARD GLOBAL COMMANDS ---" not in rc_content:
+    with open(rc_path, "a") as f:
+        f.write(shell_injection)
+    print(f"{GREEN}✔ Injected terminal interceptors and aliases into ~/{rc_file}{RESET}")
+else:
+    print(f"{YELLOW}⚠ Terminal interceptors already exist in ~/{rc_file}. Skipping injection.{RESET}")
 
-print(f"{GREEN}✔ Injected terminal aliases into ~/{rc_file}{RESET}")
-
-# 7b. Link to Profile (Global Fix)
+# 7c. Link to Profile (Global Fix)
 try:
     with open(profile_path, "r") as f: profile_content = f.read()
 except FileNotFoundError: profile_content = ""
@@ -369,5 +428,5 @@ if f"source ~/{rc_file}" not in profile_content:
 open(os.path.join(petze_dir, "activity.log"), "a").close()
 
 print(f"\n{GREEN}🚀 INSTALLATION COMPLETE!{RESET}")
-print(f"{YELLOW}Important: Run this command right now to activate your new aliases:{RESET}")
+print(f"{YELLOW}Important: Run this command right now to activate your new aliases and interceptors:{RESET}")
 print(f"source ~/{rc_file}\n")
