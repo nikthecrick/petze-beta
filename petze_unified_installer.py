@@ -225,135 +225,187 @@ with open(bash_sandbox_path, "w") as f: f.write(bash_sandbox_code)
 os.chmod(bash_sandbox_path, os.stat(bash_sandbox_path).st_mode | stat.S_IEXEC)
 print(f"{GREEN}✔ Built Bash Sandbox Engine at {bash_sandbox_path}{RESET}")
 
-# --- 4. THE DASHBOARD CLI COMMAND ---
+# --- 4. THE DASHBOARD CLI COMMAND (Micro-Server + UI) ---
 dash_path = os.path.join(petze_dir, "petze-dash")
 dash_code = r"""#!/usr/bin/env python3
-import os, json, webbrowser
-from datetime import datetime
+import os, json, webbrowser, threading, time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 TELEMETRY_FILE = os.path.expanduser("~/.openclaw/petze_telemetry.json")
-DASHBOARD_FILE = "/tmp/Petze_Dashboard.html"
+LOG_FILE = os.path.expanduser("~/.petze/activity.log")
 CONFIG_FILE = os.path.expanduser("~/.petze/config.json")
 AWS_API_URL = "https://4w7pzc9yc1.execute-api.us-west-2.amazonaws.com/prod/v1/sync"
 
-api_key = ""
-try:
-    with open(CONFIG_FILE, "r") as f: api_key = json.load(f).get("api_key", "")
-except: pass
-
-logs = []
-if os.path.exists(TELEMETRY_FILE):
-    try:
-        with open(TELEMETRY_FILE, "r") as f: logs = json.load(f)
-    except: pass
-
-rows_html = ""
-for i, log in enumerate(logs):
-    try:
-        dt = datetime.fromisoformat(log.get("timestamp", ""))
-        time_str = dt.strftime("%b %d, %H:%M:%S")
-    except: time_str = log.get("timestamp", "Unknown")
-
-    verdict = log.get("verdict", "Unknown")
-    is_approved = verdict == "Approved"
-    
-    v_color = "#10b981" if is_approved else "#ef4444"
-    v_bg = "#10b98120" if is_approved else "#ef444420"
-    badge = f"<span style='background: {v_bg}; color: {v_color}; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 0.85rem;'>{verdict}</span>"
-    
-    rows_html += f'''
-    <tr>
-        <td style="white-space: nowrap; color: #94a3b8; font-size: 0.9rem;">{time_str}</td>
-        <td><div class="intent">{log.get('intent', 'N/A')}</div></td>
-        <td><div class="cmd">{log.get('command', 'N/A')}</div></td>
-        <td style="text-align: center;">{badge}</td>
-        <td style="color: #cbd5e1; font-size: 0.9rem;">{log.get('reason', 'N/A')}</td>
-        <td style="text-align: center; white-space: nowrap;" id="action-cell-{i}">
-            <button class="btn btn-good" onclick="sendFeedback({i}, 'good')">👍 Good</button>
-            <button class="btn btn-bad" onclick="sendFeedback({i}, 'bad')">👎 Bad</button>
-        </td>
-    </tr>
-    '''
-
-if not rows_html: rows_html = "<tr><td colspan='6' style='text-align: center; color: #64748b; padding: 2rem;'>No telemetry data found.</td></tr>"
-
-html_content = f'''
-<!DOCTYPE html>
+HTML_UI = '''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Petze Training Dashboard</title>
+    <title>Petze Guard SOC</title>
     <style>
-        body {{ background-color: #0f172a; color: #e2e8f0; font-family: -apple-system, sans-serif; padding: 2rem; }}
-        .container {{ max-width: 1400px; margin: 0 auto; }}
-        h1 {{ border-bottom: 2px solid #1e293b; padding-bottom: 1rem; margin-bottom: 2rem; }}
-        table {{ width: 100%; border-collapse: separate; border-spacing: 0; background: #1e293b; border-radius: 10px; overflow: hidden; border: 1px solid #334155; }}
-        th, td {{ padding: 1rem; text-align: left; border-bottom: 1px solid #334155; }}
-        th {{ background: #0f172a; color: #94a3b8; text-transform: uppercase; font-size: 0.8rem; }}
-        .intent {{ color: #38bdf8; font-weight: 500; font-size: 0.95rem; }}
-        .cmd {{ font-family: monospace; background: #0f172a; padding: 6px; border-radius: 6px; color: #fbbf24; font-size: 0.85rem; word-break: break-all; }}
-        .btn {{ padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 0 2px; }}
-        .btn-good {{ background: #10b98120; color: #10b981; border: 1px solid #10b98150; }}
-        .btn-bad {{ background: #ef444420; color: #ef4444; border: 1px solid #ef444450; }}
-        .btn:hover {{ filter: brightness(1.5); }}
+        :root { --bg: #0f172a; --panel: #1e293b; --text: #e2e8f0; --accent: #38bdf8; --good: #10b981; --bad: #ef4444; }
+        body { background-color: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; padding: 2rem; margin: 0; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--panel); padding-bottom: 1rem; margin-bottom: 2rem; }
+        .tabs { display: flex; gap: 1rem; }
+        .tab { padding: 0.5rem 1rem; cursor: pointer; border-radius: 6px; background: var(--panel); color: #94a3b8; font-weight: bold; border: 1px solid #334155; }
+        .tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
+        .view { display: none; }
+        .view.active { display: block; }
+        
+        /* Terminal View */
+        #terminal { background: #000; color: #10b981; font-family: monospace; padding: 1.5rem; border-radius: 8px; height: 70vh; overflow-y: auto; border: 1px solid #334155; white-space: pre-wrap; font-size: 0.9rem;}
+        
+        /* Table View */
+        table { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--panel); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #334155; vertical-align: top; }
+        th { background: #0b1120; color: #94a3b8; text-transform: uppercase; font-size: 0.8rem; }
+        
+        /* Strict Column Widths to prevent overflow */
+        th:nth-child(1) { width: 12%; } /* Time */
+        th:nth-child(2) { width: 22%; } /* Intent */
+        th:nth-child(3) { width: 36%; } /* Command */
+        th:nth-child(4) { width: 20%; } /* Verdict & Reason */
+        th:nth-child(5) { width: 10%; text-align: center; } /* Action */
+        
+        /* Command Box Fixes */
+        .cmd { 
+            font-family: monospace; color: #fbbf24; background: #000; 
+            padding: 8px; border-radius: 6px; font-size: 0.85rem;
+            white-space: pre-wrap; word-break: break-all;
+            max-height: 150px; overflow-y: auto; border: 1px solid #334155;
+        }
+        
+        .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 0 2px; }
+        .btn-good { background: #10b98120; color: var(--good); border: 1px solid #10b98150; }
+        .btn-bad { background: #ef444420; color: var(--bad); border: 1px solid #ef444450; }
+        .btn:hover { filter: brightness(1.5); }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🛡️ Petze Training & Feedback Dashboard</h1>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 10%;">Timestamp</th>
-                    <th style="width: 20%;">Macro Intent</th>
-                    <th style="width: 20%;">Tool Command</th>
-                    <th style="width: 10%; text-align: center;">Verdict</th>
-                    <th style="width: 25%;">Petze Rationale</th>
-                    <th style="width: 15%; text-align: center;">RLHF Grade</th>
-                </tr>
-            </thead>
-            <tbody>{rows_html}</tbody>
-        </table>
+        <div class="header">
+            <h2>🛡️ Petze Guard SOC</h2>
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('logs')">Live Activity</div>
+                <div class="tab" onclick="switchTab('rlhf')">RLHF Training</div>
+            </div>
+        </div>
+
+        <div id="logs" class="view active">
+            <div id="terminal">Loading secure feed...</div>
+        </div>
+
+        <div id="rlhf" class="view">
+            <table>
+                <thead><tr><th>Time</th><th>Intent</th><th>Command</th><th>Verdict & Reason</th><th>Action</th></tr></thead>
+                <tbody id="rlhf-body"></tbody>
+            </table>
+        </div>
     </div>
 
     <script>
-        const rawLogs = {json.dumps(logs)};
-        const API_KEY = "{api_key}"; 
-        const API_URL = "{AWS_API_URL}";
+        let apiKey = "";
+        
+        function switchTab(tabId) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
 
-        async function sendFeedback(index, grade) {{
-            const log = rawLogs[index];
-            const cell = document.getElementById('action-cell-' + index);
+        async function fetchLogs() {
+            try {
+                const res = await fetch('/api/logs');
+                const text = await res.text();
+                const term = document.getElementById('terminal');
+                const isScrolledToBottom = term.scrollHeight - term.clientHeight <= term.scrollTop + 1;
+                term.textContent = text || "No activity detected yet.";
+                if(isScrolledToBottom) term.scrollTop = term.scrollHeight;
+            } catch(e) {}
+        }
+
+        async function fetchRLHF() {
+            try {
+                const res = await fetch('/api/telemetry');
+                const data = await res.json();
+                apiKey = data.api_key;
+                const tbody = document.getElementById('rlhf-body');
+                
+                if(!data.logs.length) { tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>No telemetry found.</td></tr>"; return; }
+                
+                tbody.innerHTML = data.logs.map((log, i) => {
+                    const color = log.verdict === 'Approved' ? 'var(--good)' : 'var(--bad)';
+                    return `<tr>
+                        <td style="color:#94a3b8; font-size:0.85rem;">${log.timestamp.replace('T', ' ').substring(0,19)}</td>
+                        <td style="color:var(--accent); font-weight:bold;">${log.intent || 'N/A'}</td>
+                        <td><div class="cmd">${log.command}</div></td>
+                        <td style="color:${color}; font-weight:bold;">${log.verdict}<br><span style="font-size:0.8rem; font-weight:normal; color:#cbd5e1; display:block; margin-top:4px;">${log.reason}</span></td>
+                        <td id="cell-${i}" style="text-align: center;">
+                            <button class="btn btn-good" onclick="sendFeedback(${i}, 'good')">👍</button>
+                            <button class="btn btn-bad" onclick="sendFeedback(${i}, 'bad')">👎</button>
+                        </td>
+                    </tr>`;
+                }).join('');
+            } catch(e) {}
+        }
+
+        async function sendFeedback(index, grade) {
+            const res = await fetch('/api/telemetry');
+            const data = await res.json();
+            const log = data.logs[index];
+            const cell = document.getElementById('cell-' + index);
+            cell.innerHTML = "⏳...";
             
-            const payload = {{
-                logs: [{{ timestamp: log.timestamp, intent: log.intent, command: log.command, verdict: log.verdict, reason: log.reason, grade: grade }}]
-            }};
-
-            cell.innerHTML = "<span style='color: #94a3b8; font-size: 0.9rem;'>⏳ Uploading...</span>";
-
-            try {{
-                const response = await fetch(API_URL, {{
+            try {
+                const response = await fetch("''' + AWS_API_URL + '''", {
                     method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json', 'x-api-key': API_KEY }},
-                    body: JSON.stringify(payload)
-                }});
+                    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                    body: JSON.stringify({ logs: [{...log, grade: grade}] })
+                });
+                if (response.ok) cell.innerHTML = "✔ Saved";
+                else cell.innerHTML = "✖ Error";
+            } catch (e) { cell.innerHTML = "✖ Net Error"; }
+        }
 
-                if (response.ok) cell.innerHTML = "<span style='color: #10b981; font-weight: bold;'>✔ Saved to AWS</span>";
-                else cell.innerHTML = "<span style='color: #ef4444;'>✖ Upload Failed</span>";
-            }} catch (error) {{
-                cell.innerHTML = "<span style='color: #ef4444;'>✖ Network Error</span>";
-            }}
-        }}
+        setInterval(fetchLogs, 1000);
+        setInterval(fetchRLHF, 3000);
+        fetchLogs(); fetchRLHF();
     </script>
 </body>
-</html>
-'''
-with open(DASHBOARD_FILE, "w") as f: f.write(html_content)
-webbrowser.open(f"file://{DASHBOARD_FILE}")
+</html>'''
+
+class PetzeHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args): pass 
+    
+    def do_GET(self):
+        if self.path == '/':
+            self.send_response(200); self.send_header('Content-type', 'text/html'); self.end_headers()
+            self.wfile.write(HTML_UI.encode())
+        elif self.path == '/api/logs':
+            self.send_response(200); self.send_header('Content-type', 'text/plain'); self.end_headers()
+            try:
+                with open(LOG_FILE, 'r') as f: self.wfile.write("".join(f.readlines()[-100:]).encode())
+            except: self.wfile.write(b"No logs found.")
+        elif self.path == '/api/telemetry':
+            self.send_response(200); self.send_header('Content-type', 'application/json'); self.end_headers()
+            try:
+                with open(TELEMETRY_FILE, 'r') as f: logs = json.load(f)
+            except: logs = []
+            try:
+                with open(CONFIG_FILE, 'r') as f: ak = json.load(f).get('api_key', '')
+            except: ak = ""
+            self.wfile.write(json.dumps({'api_key': ak, 'logs': logs}).encode())
+
+if __name__ == "__main__":
+    port = 8443
+    print(f"🛡️  Starting Petze SOC on http://localhost:{port}")
+    print("Press Ctrl+C to stop.")
+    threading.Thread(target=lambda: webbrowser.open(f"http://localhost:{port}")).start()
+    HTTPServer(('localhost', port), PetzeHandler).serve_forever()
 """
 with open(dash_path, "w") as f: f.write(dash_code)
 os.chmod(dash_path, os.stat(dash_path).st_mode | stat.S_IEXEC)
-print(f"{GREEN}✔ Built Dashboard CLI tool at {dash_path}{RESET}")
+print(f"{GREEN}✔ Built Dashboard SOC CLI tool at {dash_path}{RESET}")
 
 # --- 5. OPENCODE SETUP ---
 if agent_choice in ['1', '3']:
