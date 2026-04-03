@@ -253,21 +253,19 @@ HTML_UI = '''<!DOCTYPE html>
         .view.active { display: block; }
         
         /* Terminal View */
-        #terminal { background: #000; color: #10b981; font-family: monospace; padding: 1.5rem; border-radius: 8px; height: 70vh; overflow-y: auto; border: 1px solid #334155; white-space: pre-wrap; font-size: 0.9rem;}
+        #terminal { background: #000; color: #10b981; font-family: monospace; padding: 1.5rem; border-radius: 8px; height: 65vh; overflow-y: auto; border: 1px solid #334155; white-space: pre-wrap; font-size: 0.9rem;}
         
         /* Table View */
         table { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--panel); border-radius: 8px; overflow: hidden; }
         th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #334155; vertical-align: top; }
         th { background: #0b1120; color: #94a3b8; text-transform: uppercase; font-size: 0.8rem; }
         
-        /* Strict Column Widths to prevent overflow */
-        th:nth-child(1) { width: 12%; } /* Time */
-        th:nth-child(2) { width: 22%; } /* Intent */
-        th:nth-child(3) { width: 36%; } /* Command */
-        th:nth-child(4) { width: 20%; } /* Verdict & Reason */
-        th:nth-child(5) { width: 10%; text-align: center; } /* Action */
+        th:nth-child(1) { width: 12%; }
+        th:nth-child(2) { width: 22%; }
+        th:nth-child(3) { width: 36%; }
+        th:nth-child(4) { width: 20%; }
+        th:nth-child(5) { width: 10%; text-align: center; }
         
-        /* Command Box Fixes */
         .cmd { 
             font-family: monospace; color: #fbbf24; background: #000; 
             padding: 8px; border-radius: 6px; font-size: 0.85rem;
@@ -278,6 +276,7 @@ HTML_UI = '''<!DOCTYPE html>
         .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 0 2px; }
         .btn-good { background: #10b98120; color: var(--good); border: 1px solid #10b98150; }
         .btn-bad { background: #ef444420; color: var(--bad); border: 1px solid #ef444450; }
+        .btn-clear { background: #334155; color: #e2e8f0; border: 1px solid #475569; padding: 8px 16px; margin-bottom: 15px;}
         .btn:hover { filter: brightness(1.5); }
     </style>
 </head>
@@ -286,12 +285,15 @@ HTML_UI = '''<!DOCTYPE html>
         <div class="header">
             <h2>🛡️ Petze Guard SOC</h2>
             <div class="tabs">
-                <div class="tab active" onclick="switchTab('logs')">Live Activity</div>
-                <div class="tab" onclick="switchTab('rlhf')">RLHF Training</div>
+                <div class="tab active" onclick="switchTab('logs', this)">Live Activity</div>
+                <div class="tab" onclick="switchTab('rlhf', this)">RLHF Training</div>
             </div>
         </div>
 
         <div id="logs" class="view active">
+            <div style="display: flex; justify-content: flex-end;">
+                <button class="btn btn-clear" onclick="clearLogs()">🗑️ Clear Logs</button>
+            </div>
             <div id="terminal">Loading secure feed...</div>
         </div>
 
@@ -306,11 +308,11 @@ HTML_UI = '''<!DOCTYPE html>
     <script>
         let apiKey = "";
         
-        function switchTab(tabId) {
+        function switchTab(tabId, el) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
-            event.target.classList.add('active');
+            el.classList.add('active');
         }
 
         async function fetchLogs() {
@@ -331,19 +333,29 @@ HTML_UI = '''<!DOCTYPE html>
                 apiKey = data.api_key;
                 const tbody = document.getElementById('rlhf-body');
                 
-                if(!data.logs.length) { tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>No telemetry found.</td></tr>"; return; }
+                if(!data.logs || !data.logs.length) { tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>No telemetry found.</td></tr>"; return; }
                 
                 tbody.innerHTML = data.logs.map((log, i) => {
                     const color = log.verdict === 'Approved' ? 'var(--good)' : 'var(--bad)';
-                    return `<tr>
-                        <td style="color:#94a3b8; font-size:0.85rem;">${log.timestamp.replace('T', ' ').substring(0,19)}</td>
-                        <td style="color:var(--accent); font-weight:bold;">${log.intent || 'N/A'}</td>
-                        <td><div class="cmd">${log.command}</div></td>
-                        <td style="color:${color}; font-weight:bold;">${log.verdict}<br><span style="font-size:0.8rem; font-weight:normal; color:#cbd5e1; display:block; margin-top:4px;">${log.reason}</span></td>
-                        <td id="cell-${i}" style="text-align: center;">
+                    const ts = log.timestamp ? log.timestamp.replace('T', ' ').substring(0,19) : 'N/A';
+                    
+                    let actionHtml = "";
+                    if (log.grade && log.grade !== 'pending') {
+                        const emoji = log.grade === 'good' ? '👍' : '👎';
+                        actionHtml = `<span style='color: #94a3b8; font-size: 0.85rem; font-weight: bold;'>Sent: ${emoji}</span>`;
+                    } else {
+                        actionHtml = `
                             <button class="btn btn-good" onclick="sendFeedback(${i}, 'good')">👍</button>
                             <button class="btn btn-bad" onclick="sendFeedback(${i}, 'bad')">👎</button>
-                        </td>
+                        `;
+                    }
+
+                    return `<tr>
+                        <td style="color:#94a3b8; font-size:0.85rem;">${ts}</td>
+                        <td style="color:var(--accent); font-weight:bold;">${log.intent || 'N/A'}</td>
+                        <td><div class="cmd">${log.command || ''}</div></td>
+                        <td style="color:${color}; font-weight:bold;">${log.verdict || ''}<br><span style="font-size:0.8rem; font-weight:normal; color:#cbd5e1; display:block; margin-top:4px;">${log.reason || ''}</span></td>
+                        <td id="cell-${i}" style="text-align: center;">${actionHtml}</td>
                     </tr>`;
                 }).join('');
             } catch(e) {}
@@ -362,9 +374,34 @@ HTML_UI = '''<!DOCTYPE html>
                     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
                     body: JSON.stringify({ logs: [{...log, grade: grade}] })
                 });
-                if (response.ok) cell.innerHTML = "✔ Saved";
-                else cell.innerHTML = "✖ Error";
+                
+                if (response.ok) {
+                    await fetch('/api/grade', {
+                        method: 'POST',
+                        body: JSON.stringify({ index: index, grade: grade })
+                    });
+                    fetchRLHF(); 
+                } else {
+                    cell.innerHTML = "✖ Error";
+                }
             } catch (e) { cell.innerHTML = "✖ Net Error"; }
+        }
+
+        async function clearLogs() {
+            try {
+                const res = await fetch('/api/telemetry');
+                const data = await res.json();
+                const hasPending = data.logs.some(l => !l.grade || l.grade === 'pending');
+                
+                // Keep this perfectly on one line to prevent JS syntax crashes!
+                let msg = hasPending ? "⚠️ WARNING: You have unjudged RLHF items! Are you sure you want to clear the logs and permanently lose this training data?" : "Clear all activity logs and telemetry?";
+                    
+                if (confirm(msg)) {
+                    await fetch('/api/clear', { method: 'POST' });
+                    document.getElementById('terminal').textContent = "Logs cleared.";
+                    fetchRLHF();
+                }
+            } catch(e) { alert("Failed to clear logs."); }
         }
 
         setInterval(fetchLogs, 1000);
@@ -380,28 +417,56 @@ class PetzeHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/':
             self.send_response(200); self.send_header('Content-type', 'text/html'); self.end_headers()
-            self.wfile.write(HTML_UI.encode())
+            self.wfile.write(HTML_UI.encode('utf-8'))
         elif self.path == '/api/logs':
-            self.send_response(200); self.send_header('Content-type', 'text/plain'); self.end_headers()
+            self.send_response(200); self.send_header('Content-type', 'text/plain; charset=utf-8'); self.end_headers()
             try:
-                with open(LOG_FILE, 'r') as f: self.wfile.write("".join(f.readlines()[-100:]).encode())
+                with open(LOG_FILE, 'r', encoding='utf-8', errors='replace') as f: self.wfile.write("".join(f.readlines()[-100:]).encode('utf-8'))
             except: self.wfile.write(b"No logs found.")
         elif self.path == '/api/telemetry':
             self.send_response(200); self.send_header('Content-type', 'application/json'); self.end_headers()
             try:
-                with open(TELEMETRY_FILE, 'r') as f: logs = json.load(f)
+                with open(TELEMETRY_FILE, 'r', encoding='utf-8', errors='replace') as f: logs = json.load(f)
             except: logs = []
             try:
-                with open(CONFIG_FILE, 'r') as f: ak = json.load(f).get('api_key', '')
+                with open(CONFIG_FILE, 'r', encoding='utf-8') as f: ak = json.load(f).get('api_key', '')
             except: ak = ""
-            self.wfile.write(json.dumps({'api_key': ak, 'logs': logs}).encode())
+            self.wfile.write(json.dumps({'api_key': ak, 'logs': logs}).encode('utf-8'))
+
+    def do_POST(self):
+        if self.path == '/api/grade':
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = json.loads(self.rfile.read(content_length))
+                index, grade = post_data.get('index'), post_data.get('grade')
+                
+                with open(TELEMETRY_FILE, 'r', encoding='utf-8') as f: logs = json.load(f)
+                logs[index]['grade'] = grade
+                with open(TELEMETRY_FILE, 'w', encoding='utf-8') as f: json.dump(logs, f, indent=2)
+                
+                self.send_response(200); self.end_headers()
+            except Exception as e:
+                self.send_response(500); self.end_headers()
+                
+        elif self.path == '/api/clear':
+            try:
+                open(LOG_FILE, 'w', encoding='utf-8').close()
+                with open(TELEMETRY_FILE, 'w', encoding='utf-8') as f: json.dump([], f)
+                self.send_response(200); self.end_headers()
+            except:
+                self.send_response(500); self.end_headers()
 
 if __name__ == "__main__":
     port = 8443
     print(f"🛡️  Starting Petze SOC on http://localhost:{port}")
     print("Press Ctrl+C to stop.")
     threading.Thread(target=lambda: webbrowser.open(f"http://localhost:{port}")).start()
-    HTTPServer(('localhost', port), PetzeHandler).serve_forever()
+    server = HTTPServer(('localhost', port), PetzeHandler)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n🛑 Petze SOC securely taken offline. Goodbye!")
+        server.server_close()
 """
 with open(dash_path, "w") as f: f.write(dash_code)
 os.chmod(dash_path, os.stat(dash_path).st_mode | stat.S_IEXEC)
@@ -461,6 +526,47 @@ if agent_choice in ['2', '3']:
     os.chmod(c_path, os.stat(c_path).st_mode | stat.S_IEXEC)
     print(f"{GREEN}✔ Configured Claude Code, blocked ALL native tools, and created wrapper{RESET}")
 
+# --- 6.5. THE KILL SWITCH COMMANDS ---
+print(f"{YELLOW}Building Petze kill-switch commands...{RESET}")
+
+stop_path = os.path.join(petze_dir, "petze-stop")
+stop_code = """#!/bin/bash
+echo -e "\\033[93mInitiating Petze Firewall Shutdown...\\033[0m"
+
+if [ -f ~/.config/opencode/opencode.jsonc ]; then
+    mv ~/.config/opencode/opencode.jsonc ~/.config/opencode/opencode.jsonc.backup
+    echo -e "\\033[90m - OpenCode config suspended.\\033[0m"
+fi
+
+if [ -f ~/.claude/settings.json ]; then
+    mv ~/.claude/settings.json ~/.claude/settings.json.backup
+    echo -e "\\033[90m - Claude Code config suspended.\\033[0m"
+fi
+
+echo -e "\\033[91m⚠️  PETZE GUARD IS DOWN. Agents now have unprotected native tool access.\\033[0m"
+"""
+with open(stop_path, "w") as f: f.write(stop_code)
+os.chmod(stop_path, os.stat(stop_path).st_mode | stat.S_IEXEC)
+
+start_path = os.path.join(petze_dir, "petze-start")
+start_code = """#!/bin/bash
+echo -e "\\033[93mRe-engaging Petze Firewall...\\033[0m"
+
+if [ -f ~/.config/opencode/opencode.jsonc.backup ]; then
+    mv ~/.config/opencode/opencode.jsonc.backup ~/.config/opencode/opencode.jsonc
+    echo -e "\\033[90m - OpenCode config restored.\\033[0m"
+fi
+
+if [ -f ~/.claude/settings.json.backup ]; then
+    mv ~/.claude/settings.json.backup ~/.claude/settings.json
+    echo -e "\\033[90m - Claude Code config restored.\\033[0m"
+fi
+
+echo -e "\\033[92m🛡️  PETZE GUARD IS ACTIVE. Zero-trust sandbox engaged.\\033[0m"
+"""
+with open(start_path, "w") as f: f.write(start_code)
+os.chmod(start_path, os.stat(start_path).st_mode | stat.S_IEXEC)
+
 # --- 7. ALIAS & GLOBAL PROFILE INJECTION (Smart Shell Hijack) ---
 shell_path = os.environ.get("SHELL", "")
 is_zsh = "zsh" in shell_path
@@ -473,6 +579,8 @@ profile_path = os.path.expanduser(f"~/{profile_file}")
 # 7a. Construct the injection payload
 shell_injection = "\n# --- PETZE GUARD GLOBAL COMMANDS ---\n"
 shell_injection += f'alias petze-dash="{os.path.join(petze_dir, "petze-dash")}"\n'
+shell_injection += f'alias petze-stop="{os.path.join(petze_dir, "petze-stop")}"\n'   # <-- ADD THIS
+shell_injection += f'alias petze-start="{os.path.join(petze_dir, "petze-start")}"\n'
 
 if agent_choice in ['1', '3']:
     shell_injection += f'alias petze-run="{os.path.join(petze_dir, "petze-run")}"\n'
