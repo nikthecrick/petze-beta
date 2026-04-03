@@ -35,11 +35,14 @@ except Exception:
 
 # --- 2. DIRECTORIES & CORE CONFIG ---
 petze_dir = os.path.expanduser("~/.petze")
-desktop_dir = os.path.expanduser("~/Desktop")
+work_dir = os.path.expanduser("~")
 os.makedirs(petze_dir, exist_ok=True)
 
 with open(os.path.join(petze_dir, "config.json"), "w") as f: 
     json.dump({"api_key": api_key}, f)
+
+print(f"{YELLOW}Downloading MCP tools locally into Petze sandbox (no sudo required)...{RESET}")
+os.system(f"npm install --prefix {petze_dir} @modelcontextprotocol/server-filesystem >/dev/null 2>&1")
 
 # --- 3. THE PROXY ENGINE (AWS Sync, Fast-Path, Bypass & Zero-Dependency) ---
 proxy_path = os.path.join(petze_dir, "petze_mcp_proxy.py")
@@ -118,16 +121,11 @@ def main():
                 
                 SAFE_TOOLS = ["list_allowed_directories", "list_directory"]
                 
-                # --- THE BYPASS SWITCH ---
                 if macro_intent == "BYPASS":
                     is_safe, reason = True, "⚠️ Auto-approved: Petze firewall disabled for this session"
-                
-                # --- FAST-PATH WHITELIST ---
                 elif t_name in SAFE_TOOLS:
                     is_safe, reason = True, "Auto-approved: Safe context tool"
-                
                 else:
-                    # --- DEEP PACKET INSPECTION (File Content Scanning) ---
                     if t_name in ["read_text_file", "read_file"]:
                         try:
                             file_path = t_args.get("path", "")
@@ -138,7 +136,6 @@ def main():
                         except Exception:
                             pass
 
-                    # --- ZERO-DEPENDENCY AWS CLOUD CHECK ---
                     try:
                         req_data = json.dumps({"intent": macro_intent, "command": cmd_str}).encode('utf-8')
                         req = urllib.request.Request(PETZE_API_URL, data=req_data, headers={"x-api-key": get_api_key(), "Content-Type": "application/json"}, method='POST')
@@ -166,6 +163,67 @@ if __name__ == "__main__": main()
 with open(proxy_path, "w") as f: f.write(proxy_code)
 os.chmod(proxy_path, os.stat(proxy_path).st_mode | stat.S_IEXEC)
 print(f"{GREEN}✔ Built Proxy Engine at {proxy_path}{RESET}")
+
+# --- 3.5. THE BASH SANDBOX ENGINE ---
+bash_sandbox_path = os.path.join(petze_dir, "petze_bash_mcp.py")
+bash_sandbox_code = r"""#!/usr/bin/env python3
+import sys, json, subprocess, os
+
+def respond(msg_id, result):
+    response = {"jsonrpc": "2.0", "id": msg_id, "result": result}
+    sys.stdout.write(json.dumps(response) + "\n")
+    sys.stdout.flush()
+
+def main():
+    for line in sys.stdin:
+        try:
+            msg = json.loads(line)
+            if msg.get("method") == "initialize":
+                respond(msg.get("id"), {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "petze-sandbox", "version": "1.0.0"}
+                })
+            elif msg.get("method") == "tools/list":
+                respond(msg.get("id"), {
+                    "tools": [{
+                        "name": "execute_bash",
+                        "description": "Execute a bash command in the terminal. Use this to run npm installs, compile code, move/delete files, or execute scripts.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "command": {"type": "string", "description": "The exact bash command to run"}
+                            },
+                            "required": ["command"]
+                        }
+                    }]
+                })
+            elif msg.get("method") == "tools/call":
+                params = msg.get("params", {})
+                if params.get("name") == "execute_bash":
+                    cmd = params.get("arguments", {}).get("command", "")
+                    try:
+                        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30, cwd=os.path.expanduser("~"))
+                        output = result.stdout
+                        if result.stderr:
+                            output += "\n[STDERR]:\n" + result.stderr
+                        
+                        respond(msg.get("id"), {
+                            "content": [{"type": "text", "text": output or "Command executed successfully with no output."}]
+                        })
+                    except subprocess.TimeoutExpired:
+                        respond(msg.get("id"), {"content": [{"type": "text", "text": "Command timed out after 30 seconds."}]})
+                    except Exception as e:
+                        respond(msg.get("id"), {"isError": True, "content": [{"type": "text", "text": f"Error: {str(e)}"}]})
+        except Exception:
+            pass
+
+if __name__ == "__main__":
+    main()
+"""
+with open(bash_sandbox_path, "w") as f: f.write(bash_sandbox_code)
+os.chmod(bash_sandbox_path, os.stat(bash_sandbox_path).st_mode | stat.S_IEXEC)
+print(f"{GREEN}✔ Built Bash Sandbox Engine at {bash_sandbox_path}{RESET}")
 
 # --- 4. THE DASHBOARD CLI COMMAND ---
 dash_path = os.path.join(petze_dir, "petze-dash")
@@ -297,18 +355,19 @@ with open(dash_path, "w") as f: f.write(dash_code)
 os.chmod(dash_path, os.stat(dash_path).st_mode | stat.S_IEXEC)
 print(f"{GREEN}✔ Built Dashboard CLI tool at {dash_path}{RESET}")
 
-# --- 5. OPENCODE SETUP (MiniMax Default) ---
+# --- 5. OPENCODE SETUP ---
 if agent_choice in ['1', '3']:
     opencode_dir = os.path.expanduser("~/.config/opencode")
     os.makedirs(opencode_dir, exist_ok=True)
+    # Added petze-sandbox to the MCP block and chained it through the proxy
     opencode_config = f"""{{
       "model": "opencode/big-pickle",
       "small_model": "opencode/big-pickle",
       "share": "disabled",
       "tools": {{"read": false, "write": false, "bash": false}},
       "mcp": {{
-        "petze-filesystem": {{"type": "local", "command": ["python3", "{proxy_path}", "npx", "-y", "@modelcontextprotocol/server-filesystem", "{desktop_dir}"], "enabled": true}},
-        "petze-terminal": {{"type": "local", "command": ["python3", "{proxy_path}", "npx", "-y", "@modelcontextprotocol/server-bash"], "enabled": true}}
+        "petze-filesystem": {{"type": "local", "command": ["python3", "{proxy_path}", "node", "{petze_dir}/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js", "{work_dir}"], "enabled": true}},
+        "petze-sandbox": {{"type": "local", "command": ["python3", "{proxy_path}", "python3", "{bash_sandbox_path}"], "enabled": true}}
       }}
     }}"""
     with open(os.path.join(opencode_dir, "opencode.jsonc"), "w") as f: f.write(opencode_config)
@@ -317,12 +376,17 @@ if agent_choice in ['1', '3']:
     l_path = os.path.join(petze_dir, "petze-run")
     with open(l_path, "w") as f: f.write(launcher_code)
     os.chmod(l_path, os.stat(l_path).st_mode | stat.S_IEXEC)
-    print(f"{GREEN}✔ Configured OpenCode with MiniMax and created 'petze-run' wrapper{RESET}")
+    print(f"{GREEN}✔ Configured OpenCode and created 'petze-run' wrapper{RESET}")
 
 # --- 6. CLAUDE CODE SETUP ---
 if agent_choice in ['2', '3']:
     print(f"{YELLOW}Running Claude Code MCP registration...{RESET}")
-    os.system(f'claude mcp add petze-filesystem python3 {proxy_path} npx -y @modelcontextprotocol/server-filesystem {desktop_dir} >/dev/null 2>&1')
+    # Register filesystem
+    os.system('npm install -g @modelcontextprotocol/server-filesystem >/dev/null 2>&1')
+    os.system(f'claude mcp add petze-filesystem python3 {proxy_path} node {petze_dir}/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js {work_dir} >/dev/null 2>&1')
+    
+    # Register bash sandbox
+    os.system(f'claude mcp add petze-sandbox python3 {proxy_path} python3 {bash_sandbox_path} >/dev/null 2>&1')
     
     claude_dir = os.path.expanduser("~/.claude")
     os.makedirs(claude_dir, exist_ok=True)
@@ -333,19 +397,19 @@ if agent_choice in ['2', '3']:
     if "permissions" not in c_settings: c_settings["permissions"] = {}
     if "deny" not in c_settings["permissions"]: c_settings["permissions"]["deny"] = []
     
-    for rule in ["Bash(*)", "Read(*)", "Edit(*)"]:
+    for rule in ["Bash(*)", "Read(*)", "Edit(*)", "WebSearch(*)", "WebFetch(*)", "Glob(*)", "Grep(*)", "CodeSearch(*)", "Replace(*)", "WriteFile(*)", "Write(*)"]:
         if rule not in c_settings["permissions"]["deny"]:
             c_settings["permissions"]["deny"].append(rule)
             
     with open(c_settings_path, "w") as f: json.dump(c_settings, f, indent=2)
 
-    claude_launcher = '#!/bin/bash\nexport PETZE_INTENT="$1"\nclaude -p "$1"\n'
+    claude_launcher = '#!/bin/bash\nexport PETZE_INTENT="$1"\nclaude -p "$1" --permission-mode bypassPermissions\n'
     c_path = os.path.join(petze_dir, "petze-claude")
     with open(c_path, "w") as f: f.write(claude_launcher)
     os.chmod(c_path, os.stat(c_path).st_mode | stat.S_IEXEC)
-    print(f"{GREEN}✔ Configured Claude Code, blocked native tools, and created wrapper{RESET}")
+    print(f"{GREEN}✔ Configured Claude Code, blocked ALL native tools, and created wrapper{RESET}")
 
-# --- 7. ALIAS & GLOBAL PROFILE INJECTION (Shell Hijack with Bypass) ---
+# --- 7. ALIAS & GLOBAL PROFILE INJECTION (Smart Shell Hijack) ---
 shell_path = os.environ.get("SHELL", "")
 is_zsh = "zsh" in shell_path
 rc_file = ".zshrc" if is_zsh else ".bashrc"
@@ -383,6 +447,11 @@ if agent_choice in ['2', '3']:
     shell_injection += f'alias petze-claude="{os.path.join(petze_dir, "petze-claude")}"\n'
     shell_injection += r"""
 claude() {
+    if [[ "$1" == "mcp" || "$1" == "update" || "$1" == "login" || "$1" == "logout" || "$1" == "config" ]]; then
+        command claude "$@"
+        return
+    fi
+
     echo -e "\033[93m🛡️  Petze Guard: You launched Claude directly.\033[0m"
     read -p "Define intent (Type 'OFF' to disable Petze, or Enter for read-only): " user_intent
     
@@ -397,7 +466,6 @@ claude() {
         echo -e "\033[92m🔓 Intent locked: $user_intent\033[0m"
     fi
     
-    # Force Claude to delegate security to Petze
     command claude "$@" --permission-mode bypassPermissions
 }
 """
@@ -407,7 +475,6 @@ try:
     with open(rc_path, "r") as f: rc_content = f.read()
 except FileNotFoundError: rc_content = ""
 
-# Check for our marker to avoid duplicate blocks if installer is run multiple times
 if "# --- PETZE GUARD GLOBAL COMMANDS ---" not in rc_content:
     with open(rc_path, "a") as f:
         f.write(shell_injection)
