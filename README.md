@@ -29,24 +29,18 @@ If you haven't installed them yet, use these official commands:
 * **Claude Code:** `curl -fsSL https://claude.ai/install.sh | bash`
 
 **2. Node.js Requirement:** Petze uses Node.js to run its local Model Context Protocol (MCP) proxy servers. 
-
-* **Not sure if you have it?** Run `node -v && npx -v` in your terminal. If it prints version numbers, you are good to go!
+* **Check if installed:** Run `node -v && npx -v`. 
 * **Need to install it?** We recommend using `nvm` (Node Version Manager) for MacOS/Linux:
-
 ```bash
-# Download and install nvm:
 curl -o- [https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh](https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh) | bash
-
-# Load nvm into your current shell:
 \. "$HOME/.nvm/nvm.sh"
-
-# Download and install Node.js:
 nvm install 24
-
-# Verify the installation:
-node -v # Should print something like "v24.x.x"
-npm -v  # Should print something like "11.x.x"
 ```
+
+**3. Python 3 Requirement:** Petze's local proxy engine and SOC Dashboard are built on Python 3.
+* **Check if installed:** Run `python3 --version`.
+* **Need to install it?** * **MacOS (via Homebrew):** `brew install python`
+  * **Linux (Ubuntu/Debian):** `sudo apt update && sudo apt install python3`
 
 ---
 
