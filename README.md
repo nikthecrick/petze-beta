@@ -6,7 +6,7 @@ You are using powerful autonomous AI agents (like Claude Code and OpenCode) to w
 
 Without protection, the AI will blindly follow the hacker's instructions, using its native terminal access to steal your API keys or delete your files.
 
-**Enter Petze.** Petze is an enterprise-grade, Zero-Trust firewall that sits seamlessly between your AI agents and your Mac's operating system. It intercepts every single tool the AI tries to use, scans the payload, and asks a dedicated Cloud AI: *"Is this safe?"*
+**Enter Petze.** Petze is an enterprise-grade, Zero-Trust firewall that sits seamlessly between your AI agents and your Mac/Linux operating system. It intercepts every single tool the AI tries to use, scans the payload, and asks a dedicated Cloud AI: *"Is this safe?"*
 
 ## ✨ Key Features
 
@@ -15,6 +15,18 @@ Without protection, the AI will blindly follow the hacker's instructions, using 
 * **Cloud-Backed Verification:** Every command is instantly evaluated by an AWS-hosted Llama 3.1 model against your specific, stated intent.
 * **The "Fast-Path":** Harmless context-gathering tools (like checking the current directory) are auto-approved locally for zero-latency performance.
 * **Local SOC Dashboard:** Review every blocked or approved action in a beautiful local web interface and train the system directly from your machine.
+
+## 🛠️ Prerequisites
+
+*Petze Guard currently supports **macOS** and **Linux** environments.*
+
+Before installing the firewall, ensure you have one or both of the target AI agents installed on your machine. You can install them via your terminal:
+
+**Install OpenCode:**
+`curl -fsSL https://opencode.ai/install | bash`
+
+**Install Claude Code:**
+`curl -fsSL https://claude.ai/install.sh | bash`
 
 ## 🚀 Quick Start Installation
 
@@ -26,7 +38,7 @@ Installation takes less than 30 seconds and configures everything automatically.
 3. Enter your assigned Beta API Key when prompted.
 4. Select which agents you want to protect (OpenCode, Claude Code, or Both).
 
-**IMPORTANT:** When the installation finishes, completely close your terminal window (Cmd + Q) and open a new one to activate your global commands!
+**IMPORTANT:** When the installation finishes, completely close your terminal window (Cmd + Q or exit) and open a new one to activate your global commands!
 
 ## 💻 How to Use Petze
 
