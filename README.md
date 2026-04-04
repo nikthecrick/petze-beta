@@ -19,6 +19,24 @@ Without protection, the AI will blindly follow the hacker's instructions, using 
 
 ---
 
+### 📋 Prerequisites
+
+Before installing Petze, ensure you have your AI agents installed and ready to go. If you haven't installed them yet, use these official commands:
+
+**Install OpenCode:**
+```bash
+curl -fsSL [https://opencode.ai/install](https://opencode.ai/install) | bash
+```
+
+**Install Claude Code:**
+```bash
+curl -fsSL [https://claude.ai/install.sh](https://claude.ai/install.sh) | bash
+```
+
+**Node.js Requirement:** Petze uses Node.js to run its local Model Context Protocol (MCP) proxy servers. Please ensure you have Node.js installed (`npx` must be available in your terminal).
+
+---
+
 ### 🚀 Quick Start Installation
 
 Installation takes less than 30 seconds and configures everything automatically via smart shell injections.
