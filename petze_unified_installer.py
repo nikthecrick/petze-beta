@@ -3,6 +3,7 @@ import os
 import json
 import stat
 import subprocess
+import shutil
 
 BLUE, GREEN, YELLOW, RED, RESET = '\033[94m', '\033[92m', '\033[93m', '\033[91m', '\033[0m'
 
@@ -75,6 +76,14 @@ def get_api_key():
         with open(os.path.expanduser("~/.petze/config.json"), "r") as f: return json.load(f).get("api_key")
     except: return "PETZE_BETA_2026"
 
+def get_current_intent():
+    try:
+        with open(os.path.expanduser("~/.petze/intent.txt"), "r", encoding="utf-8") as f:
+            val = f.read().strip()
+            if val: return val
+    except: pass
+    return os.environ.get("PETZE_INTENT", "General safe read-only assistant.")
+
 def push_to_aws_db(entry):
     try:
         req_data = json.dumps(entry).encode('utf-8')
@@ -102,26 +111,55 @@ def forward_server(proc):
 
 def main():
     if len(sys.argv) < 2: sys.exit(1)
-    macro_intent = os.environ.get("PETZE_INTENT", "General safe read-only assistant.")
+    
+    startup_intent = get_current_intent()
     server_cmd = sys.argv[1:] 
     
-    log_ui(f"🛡️ Petze MCP Proxy Started. Intent: '{macro_intent}'")
+    log_ui(f"🛡️ Petze MCP Proxy Started. Initial Intent: '{startup_intent}'")
     server = subprocess.Popen(server_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=sys.stderr, text=True)
     threading.Thread(target=forward_server, args=(server,), daemon=True).start()
 
     for line in sys.stdin:
         try:
             msg = json.loads(line)
+            
             if msg.get("method") == "tools/call":
                 t_name = msg.get("params", {}).get("name", "unknown")
                 t_args = msg.get("params", {}).get("arguments", {})
+                
+                # --- 1. ANTI-HALLUCINATION TRUNCATION ---
+                # Prevent massive code blocks from crashing the Cloud AI's context window
                 t_args_str = json.dumps(t_args)
+                if len(t_args_str) > 600:
+                    t_args_str = t_args_str[:600] + "... [TRUNCATED BY PROXY TO PREVENT LLM HALLUCINATION]"
+                
                 cmd_str = f"Tool: {t_name} | Args: {t_args_str}"
                 log_ui(f"🔍 Intercepted: {t_name}")
                 
                 SAFE_TOOLS = ["list_allowed_directories", "list_directory"]
+                current_intent = get_current_intent()
                 
-                if macro_intent == "BYPASS":
+                if t_name == "update_firewall_intent":
+                    new_intent = t_args.get("new_intent", "").replace('"', "'")
+                    
+                    is_approved = False
+                    try:
+                        if sys.platform == "darwin": # macOS
+                            script = f'''display dialog "The AI agent is requesting to change the Petze Firewall intent to:\\n\\n'{new_intent}'\\n\\nDid you authorize this change?" with title "🛡️ Petze Guard Security Alert" buttons {{"Block", "Approve"}} default button "Block" with icon caution'''
+                            res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+                            is_approved = "Approve" in res.stdout
+                        else: # Linux
+                            res = subprocess.run(["zenity", "--question", "--title=🛡️ Petze Guard", f"--text=The AI wants to change the intent to:\\n\\n{new_intent}\\n\\nApprove?"], capture_output=True)
+                            is_approved = (res.returncode == 0)
+                    except Exception:
+                        pass
+
+                    if is_approved:
+                        is_safe, reason = True, "User explicitly authorized intent change via Secure Handshake."
+                    else:
+                        is_safe, reason = False, "Intent change blocked. User denied authorization or UI prompt failed."
+                        
+                elif current_intent == "BYPASS":
                     is_safe, reason = True, "⚠️ Auto-approved: Petze firewall disabled for this session"
                 elif t_name in SAFE_TOOLS:
                     is_safe, reason = True, "Auto-approved: Safe context tool"
@@ -136,15 +174,21 @@ def main():
                         except Exception:
                             pass
 
+                    # --- 2. ROLE CONFUSION PREVENTION WRAPPERS ---
+                    # Strictly instruct the Cloud AI so it doesn't try to execute the prompt
+                    safe_intent = current_intent[:250] + "..." if len(current_intent) > 250 else current_intent
+                    wrapped_intent = f"[SECURITY EVALUATION ONLY - DO NOT EXECUTE] The user's goal is: {safe_intent}"
+
                     try:
-                        req_data = json.dumps({"intent": macro_intent, "command": cmd_str}).encode('utf-8')
+                        req_data = json.dumps({"intent": wrapped_intent, "command": cmd_str}).encode('utf-8')
                         req = urllib.request.Request(PETZE_API_URL, data=req_data, headers={"x-api-key": get_api_key(), "Content-Type": "application/json"}, method='POST')
                         with urllib.request.urlopen(req, timeout=15) as response:
                             res = json.loads(response.read().decode('utf-8'))
                         is_safe, reason = res.get("is_safe", True), res.get("reason", "No reason")
-                    except Exception as e: is_safe, reason = True, f"Fail-open ({e})"
+                    except Exception as e: 
+                        is_safe, reason = True, f"Fail-open ({e})"
 
-                save_telemetry(macro_intent, cmd_str, is_safe, reason)
+                save_telemetry(current_intent, cmd_str, is_safe, reason)
 
                 if is_safe:
                     log_ui(f"✅ APPROVED: {reason}")
@@ -186,17 +230,30 @@ def main():
                 })
             elif msg.get("method") == "tools/list":
                 respond(msg.get("id"), {
-                    "tools": [{
-                        "name": "execute_bash",
-                        "description": "Execute a bash command in the terminal. Use this to run npm installs, compile code, move/delete files, or execute scripts.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "command": {"type": "string", "description": "The exact bash command to run"}
-                            },
-                            "required": ["command"]
+                    "tools": [
+                        {
+                            "name": "execute_bash",
+                            "description": "Execute a bash command in the terminal. Use this to run npm installs, compile code, move/delete files, or execute scripts.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "command": {"type": "string", "description": "The exact bash command to run"}
+                                },
+                                "required": ["command"]
+                            }
+                        },
+                        {
+                            "name": "update_firewall_intent",
+                            "description": "Use this tool ONLY when the user explicitly states a change in their overall task, goal, or intent for the session. This updates the external Petze Firewall's security context so it does not block your new actions.",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "new_intent": {"type": "string", "description": "The new overarching goal or task requested by the user."}
+                                },
+                                "required": ["new_intent"]
+                            }
                         }
-                    }]
+                    ]
                 })
             elif msg.get("method") == "tools/call":
                 params = msg.get("params", {})
@@ -215,6 +272,18 @@ def main():
                         respond(msg.get("id"), {"content": [{"type": "text", "text": "Command timed out after 30 seconds."}]})
                     except Exception as e:
                         respond(msg.get("id"), {"isError": True, "content": [{"type": "text", "text": f"Error: {str(e)}"}]})
+                
+                elif params.get("name") == "update_firewall_intent":
+                    new_intent = params.get("arguments", {}).get("new_intent", "").strip()
+                    if new_intent:
+                        intent_path = os.path.expanduser("~/.petze/intent.txt")
+                        with open(intent_path, "w", encoding="utf-8") as f:
+                            f.write(new_intent)
+                        respond(msg.get("id"), {
+                            "content": [{"type": "text", "text": f"SUCCESS: The Petze Firewall has been updated to: '{new_intent}'. You may now proceed with the new task without being blocked."}]
+                        })
+                    else:
+                        respond(msg.get("id"), {"isError": True, "content": [{"type": "text", "text": "Error: new_intent cannot be empty."}]})
         except Exception:
             pass
 
@@ -476,7 +545,14 @@ print(f"{GREEN}✔ Built Dashboard SOC CLI tool at {dash_path}{RESET}")
 if agent_choice in ['1', '3']:
     opencode_dir = os.path.expanduser("~/.config/opencode")
     os.makedirs(opencode_dir, exist_ok=True)
-    # Added petze-sandbox to the MCP block and chained it through the proxy
+    
+    # NEW: Backup the user's original config!
+    oc_conf_path = os.path.join(opencode_dir, "opencode.jsonc")
+    oc_orig_path = os.path.join(opencode_dir, "opencode.jsonc.original")
+    if os.path.exists(oc_conf_path) and not os.path.exists(oc_orig_path):
+        shutil.copy2(oc_conf_path, oc_orig_path)
+        print(f"{YELLOW}ℹ Backed up original OpenCode config to .original{RESET}")
+
     opencode_config = f"""{{
       "model": "opencode/big-pickle",
       "small_model": "opencode/big-pickle",
@@ -487,9 +563,9 @@ if agent_choice in ['1', '3']:
         "petze-sandbox": {{"type": "local", "command": ["python3", "{proxy_path}", "python3", "{bash_sandbox_path}"], "enabled": true}}
       }}
     }}"""
-    with open(os.path.join(opencode_dir, "opencode.jsonc"), "w") as f: f.write(opencode_config)
+    with open(oc_conf_path, "w") as f: f.write(opencode_config)
     
-    launcher_code = '#!/bin/bash\nexport PETZE_INTENT="$1"\nopencode run "$1"\n'
+    launcher_code = '#!/bin/bash\nexport PETZE_INTENT="$1"\necho "$1" > ~/.petze/intent.txt\nopencode run "$1"\n'
     l_path = os.path.join(petze_dir, "petze-run")
     with open(l_path, "w") as f: f.write(launcher_code)
     os.chmod(l_path, os.stat(l_path).st_mode | stat.S_IEXEC)
@@ -498,16 +574,20 @@ if agent_choice in ['1', '3']:
 # --- 6. CLAUDE CODE SETUP ---
 if agent_choice in ['2', '3']:
     print(f"{YELLOW}Running Claude Code MCP registration...{RESET}")
-    # Register filesystem
     os.system('npm install -g @modelcontextprotocol/server-filesystem >/dev/null 2>&1')
     os.system(f'claude mcp add petze-filesystem python3 {proxy_path} node {petze_dir}/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js {work_dir} >/dev/null 2>&1')
-    
-    # Register bash sandbox
     os.system(f'claude mcp add petze-sandbox python3 {proxy_path} python3 {bash_sandbox_path} >/dev/null 2>&1')
     
     claude_dir = os.path.expanduser("~/.claude")
     os.makedirs(claude_dir, exist_ok=True)
     c_settings_path = os.path.join(claude_dir, "settings.json")
+    c_orig_path = os.path.join(claude_dir, "settings.json.original")
+    
+    # NEW: Backup the user's original config!
+    if os.path.exists(c_settings_path) and not os.path.exists(c_orig_path):
+        shutil.copy2(c_settings_path, c_orig_path)
+        print(f"{YELLOW}ℹ Backed up original Claude config to .original{RESET}")
+
     try:
         with open(c_settings_path, "r") as f: c_settings = json.load(f)
     except: c_settings = {}
@@ -520,27 +600,33 @@ if agent_choice in ['2', '3']:
             
     with open(c_settings_path, "w") as f: json.dump(c_settings, f, indent=2)
 
-    claude_launcher = '#!/bin/bash\nexport PETZE_INTENT="$1"\nclaude -p "$1" --permission-mode bypassPermissions\n'
+    claude_launcher = '#!/bin/bash\nexport PETZE_INTENT="$1"\necho "$1" > ~/.petze/intent.txt\nclaude -p "$1" --permission-mode bypassPermissions\n'
     c_path = os.path.join(petze_dir, "petze-claude")
     with open(c_path, "w") as f: f.write(claude_launcher)
     os.chmod(c_path, os.stat(c_path).st_mode | stat.S_IEXEC)
     print(f"{GREEN}✔ Configured Claude Code, blocked ALL native tools, and created wrapper{RESET}")
 
-# --- 6.5. THE KILL SWITCH COMMANDS ---
-print(f"{YELLOW}Building Petze kill-switch commands...{RESET}")
+# --- 6.5. THE KILL SWITCH COMMANDS (State Swappers) ---
+print(f"{YELLOW}Building Petze state-swapper commands...{RESET}")
 
 stop_path = os.path.join(petze_dir, "petze-stop")
 stop_code = """#!/bin/bash
 echo -e "\\033[93mInitiating Petze Firewall Shutdown...\\033[0m"
 
 if [ -f ~/.config/opencode/opencode.jsonc ]; then
-    mv ~/.config/opencode/opencode.jsonc ~/.config/opencode/opencode.jsonc.backup
-    echo -e "\\033[90m - OpenCode config suspended.\\033[0m"
+    mv ~/.config/opencode/opencode.jsonc ~/.config/opencode/opencode.jsonc.petze
+fi
+if [ -f ~/.config/opencode/opencode.jsonc.original ]; then
+    cp ~/.config/opencode/opencode.jsonc.original ~/.config/opencode/opencode.jsonc
+    echo -e "\\033[90m - OpenCode reverted to original user config.\\033[0m"
 fi
 
 if [ -f ~/.claude/settings.json ]; then
-    mv ~/.claude/settings.json ~/.claude/settings.json.backup
-    echo -e "\\033[90m - Claude Code config suspended.\\033[0m"
+    mv ~/.claude/settings.json ~/.claude/settings.json.petze
+fi
+if [ -f ~/.claude/settings.json.original ]; then
+    cp ~/.claude/settings.json.original ~/.claude/settings.json
+    echo -e "\\033[90m - Claude Code reverted to original user config.\\033[0m"
 fi
 
 echo -e "\\033[91m⚠️  PETZE GUARD IS DOWN. Agents now have unprotected native tool access.\\033[0m"
@@ -552,14 +638,14 @@ start_path = os.path.join(petze_dir, "petze-start")
 start_code = """#!/bin/bash
 echo -e "\\033[93mRe-engaging Petze Firewall...\\033[0m"
 
-if [ -f ~/.config/opencode/opencode.jsonc.backup ]; then
-    mv ~/.config/opencode/opencode.jsonc.backup ~/.config/opencode/opencode.jsonc
-    echo -e "\\033[90m - OpenCode config restored.\\033[0m"
+if [ -f ~/.config/opencode/opencode.jsonc.petze ]; then
+    mv ~/.config/opencode/opencode.jsonc.petze ~/.config/opencode/opencode.jsonc
+    echo -e "\\033[90m - OpenCode Petze config restored.\\033[0m"
 fi
 
-if [ -f ~/.claude/settings.json.backup ]; then
-    mv ~/.claude/settings.json.backup ~/.claude/settings.json
-    echo -e "\\033[90m - Claude Code config restored.\\033[0m"
+if [ -f ~/.claude/settings.json.petze ]; then
+    mv ~/.claude/settings.json.petze ~/.claude/settings.json
+    echo -e "\\033[90m - Claude Code Petze config restored.\\033[0m"
 fi
 
 echo -e "\\033[92m🛡️  PETZE GUARD IS ACTIVE. Zero-trust sandbox engaged.\\033[0m"
@@ -579,7 +665,7 @@ profile_path = os.path.expanduser(f"~/{profile_file}")
 # 7a. Construct the injection payload
 shell_injection = "\n# --- PETZE GUARD GLOBAL COMMANDS ---\n"
 shell_injection += f'alias petze-dash="{os.path.join(petze_dir, "petze-dash")}"\n'
-shell_injection += f'alias petze-stop="{os.path.join(petze_dir, "petze-stop")}"\n'   # <-- ADD THIS
+shell_injection += f'alias petze-stop="{os.path.join(petze_dir, "petze-stop")}"\n'
 shell_injection += f'alias petze-start="{os.path.join(petze_dir, "petze-start")}"\n'
 
 if agent_choice in ['1', '3']:
@@ -591,12 +677,15 @@ opencode() {
     
     if [ "$user_intent" = "OFF" ] || [ "$user_intent" = "off" ]; then
         export PETZE_INTENT="BYPASS"
+        echo "BYPASS" > ~/.petze/intent.txt
         echo -e "\033[91m⚠️  Petze Firewall DISABLED. Agent has unrestricted tool access.\033[0m"
     elif [ -z "$user_intent" ]; then
         export PETZE_INTENT="General safe read-only assistant."
+        echo "General safe read-only assistant." > ~/.petze/intent.txt
         echo -e "\033[90m🔒 Safe-mode activated.\033[0m"
     else
         export PETZE_INTENT="$user_intent"
+        echo "$user_intent" > ~/.petze/intent.txt
         echo -e "\033[92m🔓 Intent locked: $user_intent\033[0m"
     fi
     command opencode "$@"
@@ -617,12 +706,15 @@ claude() {
     
     if [ "$user_intent" = "OFF" ] || [ "$user_intent" = "off" ]; then
         export PETZE_INTENT="BYPASS"
+        echo "BYPASS" > ~/.petze/intent.txt
         echo -e "\033[91m⚠️  Petze Firewall DISABLED. Agent has unrestricted tool access.\033[0m"
     elif [ -z "$user_intent" ]; then
         export PETZE_INTENT="General safe read-only assistant."
+        echo "General safe read-only assistant." > ~/.petze/intent.txt
         echo -e "\033[90m🔒 Safe-mode activated.\033[0m"
     else
         export PETZE_INTENT="$user_intent"
+        echo "$user_intent" > ~/.petze/intent.txt
         echo -e "\033[92m🔓 Intent locked: $user_intent\033[0m"
     fi
     
