@@ -580,25 +580,52 @@ if agent_choice in ['1', '3']:
     with open(oc_conf_path, "w") as f: f.write(opencode_config)
     print(f"{GREEN}✔ Configured OpenCode.{RESET}")
 
-# --- 6. CLAUDE CODE SETUP ---
+# --- 6. CLAUDE CODE SETUP (Global Enforcement) ---
 if agent_choice in ['2', '3']:
-    print(f"{YELLOW}Running Claude Code MCP registration...{RESET}")
-    os.system('npm install -g @modelcontextprotocol/server-filesystem >/dev/null 2>&1')
-    os.system(f'claude mcp add petze-filesystem python3 {proxy_path} node {petze_dir}/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js {work_dir} >/dev/null 2>&1')
-    os.system(f'claude mcp add petze-sandbox python3 {proxy_path} python3 {bash_sandbox_path} >/dev/null 2>&1')
+    print(f"{YELLOW}Running Claude Code Global MCP registration...{RESET}")
+    
+    # 1. Install the filesystem tool globally
+    os.system(f'npm install -g @modelcontextprotocol/server-filesystem >/dev/null 2>&1')
     
     claude_dir = os.path.expanduser("~/.claude")
     os.makedirs(claude_dir, exist_ok=True)
+    
+    # 2. Inject MCPs directly into Global Config (~/.claude.json)
+    # THE FIX: This must be the root file, NOT inside the ~/.claude/ directory!
+    c_config_path = os.path.expanduser("~/.claude.json") 
+    
+    try:
+        with open(c_config_path, "r") as f: c_config = json.load(f)
+    except: c_config = {}
+    
+    if "mcpServers" not in c_config: c_config["mcpServers"] = {}
+    
+    c_config["mcpServers"]["petze-filesystem"] = {
+        "type": "stdio",
+        "command": "python3",
+        "args": [proxy_path, "node", f"{petze_dir}/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js", work_dir]
+    }
+    c_config["mcpServers"]["petze-sandbox"] = {
+        "type": "stdio",
+        "command": "python3",
+        "args": [proxy_path, "python3", bash_sandbox_path]
+    }
+    
+    with open(c_config_path, "w") as f: json.dump(c_config, f, indent=2)
+
+    # 3. Block Native Tools in Global Settings (~/.claude/settings.json)
     c_settings_path = os.path.join(claude_dir, "settings.json")
     c_orig_path = os.path.join(claude_dir, "settings.json.original")
     
     if os.path.exists(c_settings_path) and not os.path.exists(c_orig_path):
+        import shutil
         shutil.copy2(c_settings_path, c_orig_path)
         print(f"{YELLOW}ℹ Backed up original Claude config to .original{RESET}")
 
     try:
         with open(c_settings_path, "r") as f: c_settings = json.load(f)
     except: c_settings = {}
+    
     if "permissions" not in c_settings: c_settings["permissions"] = {}
     if "deny" not in c_settings["permissions"]: c_settings["permissions"]["deny"] = []
     
@@ -607,7 +634,13 @@ if agent_choice in ['2', '3']:
             c_settings["permissions"]["deny"].append(rule)
             
     with open(c_settings_path, "w") as f: json.dump(c_settings, f, indent=2)
-    print(f"{GREEN}✔ Configured Claude Code and blocked native tools.{RESET}")
+
+    # 4. Create the Shell Wrapper
+    claude_launcher = '#!/bin/bash\nexport PETZE_INTENT="$1"\necho "$1" > ~/.petze/intent.txt\nclaude -p "$1" --permission-mode bypassPermissions\n'
+    c_path = os.path.join(petze_dir, "petze-claude")
+    with open(c_path, "w") as f: f.write(claude_launcher)
+    os.chmod(c_path, os.stat(c_path).st_mode | stat.S_IEXEC)
+    print(f"{GREEN}✔ Configured Claude Code globally, blocked ALL native tools, and created wrapper{RESET}")
 
 # --- 6.5. THE KILL SWITCH COMMANDS (State Swappers) ---
 print(f"{YELLOW}Building Petze state-swapper commands...{RESET}")
