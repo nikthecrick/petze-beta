@@ -55,6 +55,7 @@ petze-claude "Your prompt goes here. Be specific about your goal."
 petze-stop                   # Drops the firewall and restores your original, unprotected agent configs.
 petze-start                  # Re-engages the Zero-Trust MCP sandbox.
 petze-whitelist example.com  # Whitelists a domain for frictionless outbound API requests.
+petze-whitelist              # Shows all whitelisted domains
 petze-dash                   # Opens the Local Security Operations Center (SOC) in your browser.
 ```
 
