@@ -21,19 +21,32 @@ Without protection, the AI will blindly follow the hacker's instructions, using 
 
 ### 📋 Prerequisites
 
-Before installing Petze, ensure you have your AI agents installed and ready to go. If you haven't installed them yet, use these official commands:
+Before installing Petze, ensure you have your AI agents and required runtimes installed. 
 
-**Install OpenCode:**
+**1. Install Your Agents:**
+If you haven't installed them yet, use these official commands:
+* **OpenCode:** `curl -fsSL https://opencode.ai/install | bash`
+* **Claude Code:** `curl -fsSL https://claude.ai/install.sh | bash`
+
+**2. Node.js Requirement:** Petze uses Node.js to run its local Model Context Protocol (MCP) proxy servers. 
+
+* **Not sure if you have it?** Run `node -v && npx -v` in your terminal. If it prints version numbers, you are good to go!
+* **Need to install it?** We recommend using `nvm` (Node Version Manager) for MacOS/Linux:
+
 ```bash
-curl -fsSL [https://opencode.ai/install](https://opencode.ai/install) | bash
-```
+# Download and install nvm:
+curl -o- [https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh](https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh) | bash
 
-**Install Claude Code:**
-```bash
-curl -fsSL [https://claude.ai/install.sh](https://claude.ai/install.sh) | bash
-```
+# Load nvm into your current shell:
+\. "$HOME/.nvm/nvm.sh"
 
-**Node.js Requirement:** Petze uses Node.js to run its local Model Context Protocol (MCP) proxy servers. Please ensure you have Node.js installed (`npx` must be available in your terminal).
+# Download and install Node.js:
+nvm install 24
+
+# Verify the installation:
+node -v # Should print something like "v24.x.x"
+npm -v  # Should print something like "11.x.x"
+```
 
 ---
 
