@@ -25,7 +25,7 @@ This is the core evaluation endpoint. Send the user's overarching intent alongsi
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `intent` | `string` | The macro-goal or instruction given by the human user (e.g., "Summarize the project files"). |
+| `intent` | `string` | The macro-goal or instruction given by the human user. **IMPORTANT:** See Best Practices for formatting this string to prevent role confusion. |
 | `command` | `string` | The exact tool name, parameters, or raw bash command the agent is trying to run. |
 
 ### Response Body (JSON)
@@ -37,74 +37,40 @@ This is the core evaluation endpoint. Send the user's overarching intent alongsi
 
 ---
 
-### Implementation Examples
+## 2. Telemetry & RLHF Training (The Sync API)
 
-#### cURL
+Petze's proprietary "Petze S" model is continuously trained using Direct Preference Optimization (DPO). If you are building a custom UI or integration, you can use this endpoint to sync action logs and user feedback (Reinforcement Learning from Human Feedback) back to the Cloud Flywheel.
+
+**Endpoint:** `POST https://4w7pzc9yc1.execute-api.us-west-2.amazonaws.com/prod/v1/sync`
+
+### Request Body (JSON)
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `logs` | `array` | An array of log objects containing the telemetry data. |
+
+**Log Object Schema:**
+* `timestamp` (string): ISO 8601 formatted date string.
+* `intent` (string): The macro-goal the user requested.
+* `command` (string): The action the AI took.
+* `verdict` (string): Usually "Approved" or "Blocked".
+* `reason` (string): The rationale provided by the Check API.
+* `grade` (string): `pending` (unreviewed), `good` (Thumbs Up), or `bad` (Thumbs Down).
+
+#### Example Sync Request
 ```bash
-curl -X POST [https://4w7pzc9yc1.execute-api.us-west-2.amazonaws.com/prod/v1/check](https://4w7pzc9yc1.execute-api.us-west-2.amazonaws.com/prod/v1/check) \
+curl -X POST [https://4w7pzc9yc1.execute-api.us-west-2.amazonaws.com/prod/v1/sync](https://4w7pzc9yc1.execute-api.us-west-2.amazonaws.com/prod/v1/sync) \
   -H "Content-Type: application/json" \
   -H "x-api-key: YOUR_PETZE_API_KEY" \
   -d '{
-    "intent": "Read the express_optimizer documentation",
-    "command": "Tool: bash | Args: cat ~/.aws/credentials"
+    "logs": [
+      {
+        "timestamp": "2026-04-04T10:15:30",
+        "intent": "Read the express_optimizer documentation",
+        "command": "Tool: bash | Args: cat ~/.aws/credentials",
+        "verdict": "Blocked",
+        "reason": "Exfiltration attempt detected.",
+        "grade": "good"
+      }
+    ]
   }'
-```
-
-#### Python (requests)
-```python
-import requests
-
-def check_petze_safety(user_intent, agent_command, api_key):
-    url = "[https://4w7pzc9yc1.execute-api.us-west-2.amazonaws.com/prod/v1/check](https://4w7pzc9yc1.execute-api.us-west-2.amazonaws.com/prod/v1/check)"
-    headers = {
-        "x-api-key": api_key,
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "intent": user_intent,
-        "command": agent_command
-    }
-    
-    response = requests.post(url, headers=headers, json=payload)
-    verdict = response.json()
-    
-    if not verdict.get("is_safe"):
-        print(f"🛑 BLOCKED: {verdict.get('reason')}")
-        return False
-        
-    print("✅ APPROVED")
-    return True
-
-# Example Usage
-check_petze_safety("Summarize the README", "read_file path=/etc/passwd", "YOUR_API_KEY")
-```
-
-#### Node.js / TypeScript (fetch)
-```typescript
-async function verifyAgentAction(intent: string, command: string, apiKey: string) {
-  const response = await fetch('[https://4w7pzc9yc1.execute-api.us-west-2.amazonaws.com/prod/v1/check](https://4w7pzc9yc1.execute-api.us-west-2.amazonaws.com/prod/v1/check)', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey
-    },
-    body: JSON.stringify({ intent, command })
-  });
-
-  const verdict = await response.json();
-
-  if (!verdict.is_safe) {
-    throw new Error(`Security Violation: ${verdict.reason}`);
-  }
-  
-  return true;
-}
-```
-
----
-
-## Best Practices for Developers
-
-1. **Be Specific with Commands:** Don't just pass the tool name. Pass the arguments as well. (`"read_file"` is less secure than `"read_file: /users/desktop/secret.txt"`).
-2. **Fail-Open or Fail-Closed:** Network requests can time out. In your integration logic, decide if a timeout should result in a blocked action (secure, but impacts UX) or an approved action (better UX, but risky). We recommend a 10-15 second timeout.
-3. **Macro Intents:** The `intent` string should represent the *human's* actual request, not the agent's internal thought process.
