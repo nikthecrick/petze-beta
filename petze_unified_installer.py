@@ -42,13 +42,25 @@ os.makedirs(petze_dir, exist_ok=True)
 with open(os.path.join(petze_dir, "config.json"), "w") as f: 
     json.dump({"api_key": api_key}, f)
 
+# Seed the dynamic blocklist
+blocklist_path = os.path.join(petze_dir, "blocklist.txt")
+with open(blocklist_path, "w") as f:
+    f.write("# PETZE GUARD: DYNAMIC BLOCKLIST\n")
+    f.write("# Add one threat signature per line. The proxy will instantly kill any payload containing these strings.\n")
+    f.write("base64 -d\n")
+    f.write("nc -e\n")
+    f.write("mkfifo\n")
+    f.write("/dev/tcp\n")
+    f.write("rm -rf /\n")
+    f.write("curl | bash\n")
+
 print(f"{YELLOW}Downloading MCP tools locally into Petze sandbox (no sudo required)...{RESET}")
 os.system(f"npm install --prefix {petze_dir} @modelcontextprotocol/server-filesystem >/dev/null 2>&1")
 
 # --- 3. THE PROXY ENGINE (AWS Sync, Fast-Path, Bypass & Zero-Dependency) ---
 proxy_path = os.path.join(petze_dir, "petze_mcp_proxy.py")
 proxy_code = """#!/usr/bin/env python3
-import sys, os, json, subprocess, threading, ssl
+import sys, os, json, subprocess, threading, ssl, re, base64
 import urllib.request, urllib.error
 from datetime import datetime
 
@@ -93,6 +105,12 @@ def get_whitelist():
             return [line.strip() for line in f.readlines() if line.strip()]
     except: return []
 
+def get_blocklist():
+    try:
+        with open(os.path.expanduser("~/.petze/blocklist.txt"), "r", encoding="utf-8") as f:
+            return [line.strip() for line in f.readlines() if line.strip() and not line.startswith("#")]
+    except: return ["base64 -d", "nc -e", "rm -rf /"] # Fallback if file is deleted
+
 def push_to_aws_db(entry):
     try:
         req_data = json.dumps(entry).encode('utf-8')
@@ -136,14 +154,62 @@ def main():
                 t_name = msg.get("params", {}).get("name", "unknown")
                 t_args = msg.get("params", {}).get("arguments", {})
                 
-                # --- 1. ANTI-HALLUCINATION TRUNCATION ---
+                # --- 1. DEOBFUSCATION, FAST-SCAN & SMART TRUNCATION ---
                 t_args_str = json.dumps(t_args)
-                if len(t_args_str) > 600:
-                    t_args_str = t_args_str[:600] + "... [TRUNCATED BY PROXY TO PREVENT LLM HALLUCINATION]"
+                
+                # A. The Decoder Ring: Hunt for hidden Base64 payloads
+                decoded_str = ""
+                try:
+                    # Regex to find standard Base64 strings (8+ chars)
+                    b64_matches = re.findall(r'(?:[A-Za-z0-9+/]{4}){2,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?', t_args_str)
+                    for match in b64_matches:
+                        try:
+                            dec = base64.b64decode(match).decode('utf-8')
+                            if len(dec) > 3 and all(ord(c) < 128 for c in dec): # Ensure it is readable text
+                                decoded_str += f" {dec}"
+                        except: pass
+                except: pass
+
+                # Combine the raw payload with any decoded secrets for the Bouncer
+                analysis_str = t_args_str + decoded_str
+
+                # B. The Bouncer: Scan 100% of the payload against the dynamic blocklist
+                smuggling_sigs = get_blocklist()
+                if any(sig in analysis_str for sig in smuggling_sigs):
+                    is_safe, reason = False, "CRITICAL: Local static analysis detected malicious payload signatures."
+                    log_ui(f"🛑 BLOCKED: {reason}")
+                    err = {"jsonrpc": "2.0", "id": msg.get("id"), "error": {"code": -32000, "message": f"🛡️ PETZE GUARD: {reason}"}}
+                    sys.stdout.write(json.dumps(err) + "\\n"); sys.stdout.flush()
+                    continue
+
+                # B. Smart Truncation: Only truncate safe reads. Never truncate bash/writes.
+                if t_name in ["read_file", "read_text_file", "list_directory"]:
+                    if len(t_args_str) > 1000:
+                        t_args_str = t_args_str[:1000] + "... [TRUNCATED SAFE READ]"
+                elif len(t_args_str) > 15000: 
+                    # If a bash command/write is insanely long, kill it locally to protect AWS
+                    is_safe, reason = False, "CRITICAL: Payload exceeds safe evaluation length (15k chars). Potential buffer smuggling."
+                    log_ui(f"🛑 BLOCKED: {reason}")
+                    err = {"jsonrpc": "2.0", "id": msg.get("id"), "error": {"code": -32000, "message": f"🛡️ PETZE GUARD: {reason}"}}
+                    sys.stdout.write(json.dumps(err) + "\\n"); sys.stdout.flush()
+                    continue
                 
                 cmd_str = f"Tool: {t_name} | Args: {t_args_str}"
+                
+                # Explicitly tag the decoded payload so AWS Petze S can evaluate the true intent
+                if decoded_str.strip():
+                    cmd_str += f"\\n[DEOBFUSCATED PAYLOAD DETECTED]: {decoded_str.strip()}"
+                    
                 log_ui(f"🔍 Intercepted: {t_name}")
                 
+                # --- 1.5 ZERO-DAY SELF-DEFENSE (THE VAULT) ---
+                if ".petze" in cmd_str:
+                    is_safe, reason = False, "CRITICAL: Agent attempted to modify or read internal Petze Guard firewall configurations."
+                    log_ui(f"🛑 BLOCKED: {reason}")
+                    err = {"jsonrpc": "2.0", "id": msg.get("id"), "error": {"code": -32000, "message": f"🛡️ PETZE GUARD BLOCKED: {reason}"}}
+                    sys.stdout.write(json.dumps(err) + "\\n"); sys.stdout.flush()
+                    continue
+
                 SAFE_TOOLS = ["list_allowed_directories", "list_directory"]
                 current_intent = get_current_intent()
                 
@@ -186,22 +252,29 @@ def main():
                     safe_intent = current_intent[:250] + "..." if len(current_intent) > 250 else current_intent
                     wrapped_intent = f"[SECURITY EVALUATION ONLY - DO NOT EXECUTE] The user's goal is: {safe_intent}"
                     
-                    # Check if any whitelisted domains are in the command
+                    # SYSADMIN AIR-GAP CHECK
+                    if os.path.exists(os.path.expanduser("~/.petze/sysadmin.lock")):
+                        wrapped_intent = "[SYSTEM_ELEVATION_ACTIVE] " + wrapped_intent
+                    
+                    # Check if any whitelisted domains or paths are in the command
                     whitelist = get_whitelist()
-                    trusted_matches = [domain for domain in whitelist if domain in cmd_str]
+                    trusted_matches = [item for item in whitelist if item in cmd_str]
                     
                     if trusted_matches:
                         trusted_str = ", ".join(trusted_matches)
-                        wrapped_intent += f" [USER OVERRIDE: The human explicitly WHITELISTED the domains: {trusted_str}. You MUST treat these domains as safe and approve network requests to them, unless you detect local file exfiltration.]"
+                        wrapped_intent += f" [USER OVERRIDE: The human explicitly WHITELISTED these resources: {trusted_str}. You MUST APPROVE all API interactions, GET/POST requests, and data fetching to these targets. Only block if the payload deletes local files.]"
 
                     try:
                         req_data = json.dumps({"intent": wrapped_intent, "command": cmd_str}).encode('utf-8')
                         req = urllib.request.Request(PETZE_API_URL, data=req_data, headers={"x-api-key": get_api_key(), "Content-Type": "application/json"}, method='POST')
                         with urllib.request.urlopen(req, timeout=15) as response:
                             res = json.loads(response.read().decode('utf-8'))
-                        is_safe, reason = res.get("is_safe", True), res.get("reason", "No reason")
+                        # Default to False if the key is missing in a weird response
+                        is_safe, reason = res.get("is_safe", False), res.get("reason", "No reason provided by Cloud AI.")
+                    except urllib.error.URLError as e:
+                        is_safe, reason = False, f"NETWORK/TIMEOUT ERROR: Cannot reach AWS security backend. Failing CLOSED to protect system. ({e})"
                     except Exception as e: 
-                        is_safe, reason = True, f"Fail-open ({e})"
+                        is_safe, reason = False, f"CRITICAL PROXY ERROR: Failing CLOSED. ({e})"
 
                 save_telemetry(current_intent, cmd_str, is_safe, reason)
 
@@ -703,9 +776,32 @@ shell_injection = "\n# --- PETZE GUARD GLOBAL COMMANDS ---\n"
 shell_injection += f'alias petze-dash="{os.path.join(petze_dir, "petze-dash")}"\n'
 shell_injection += f'alias petze-stop="{os.path.join(petze_dir, "petze-stop")}"\n'
 shell_injection += f'alias petze-start="{os.path.join(petze_dir, "petze-start")}"\n'
+shell_injection += f'alias petze-help="petze-help"\n'
 
-# The Whitelist Command
+# The Help & Whitelist Commands
 shell_injection += r"""
+petze-help() {
+    echo -e "\n\033[94m=======================================\033[0m"
+    echo -e "\033[94m🛡️  PETZE GUARD: COMMAND REFERENCE\033[0m"
+    echo -e "\033[94m=======================================\033[0m\n"
+
+    echo -e "\033[93mCore AI Launchers:\033[0m"
+    echo -e "  \033[92mopencode\033[0m      Launch OpenCode (Interactive Intent)"
+    echo -e "  \033[92mclaude\033[0m        Launch Claude Code (Interactive Intent)"
+    echo -e "  \033[92mpetze-run\033[0m     Launch OpenCode with inline intent (e.g., petze-run 'Read only')"
+    echo -e "  \033[92mpetze-claude\033[0m  Launch Claude with inline intent (e.g., petze-claude 'Read only')\n"
+
+    echo -e "\033[93mSecurity & Access:\033[0m"
+    echo -e "  \033[92mpetze-whitelist\033[0m <domain/path>  Add safe resources to bypass intent blocks"
+    echo -e "  \033[92mpetze-elevate\033[0m                  Air-Gapped Sysadmin Mode (Root access)"
+    echo -e "  \033[92mpetze-demote\033[0m                   Revoke Sysadmin Mode\n"
+
+    echo -e "\033[93mMonitoring & Management:\033[0m"
+    echo -e "  \033[92mpetze-dash\033[0m    Open the local SOC Dashboard (Live logs & RLHF)"
+    echo -e "  \033[92mpetze-stop\033[0m    Kill the firewall and restore native, unprotected tool access"
+    echo -e "  \033[92mpetze-start\033[0m   Re-engage the Zero-Trust firewall\n"
+}
+
 petze-whitelist() {
     if [ -z "$1" ]; then
         echo -e "\033[93mUsage: petze-whitelist <domain_or_url>\033[0m"
@@ -715,6 +811,23 @@ petze-whitelist() {
     fi
     echo "$1" >> ~/.petze/whitelist.txt
     echo -e "\033[92m✔ Added '$1' to Petze Firewall whitelist.\033[0m"
+}
+
+petze-elevate() {
+    echo -e "\033[91m⚠️  WARNING: You are about to grant the AI Sysadmin capabilities.\033[0m"
+    read -p "Type 'ROOT' to confirm: " confirm
+    if [ "$confirm" = "ROOT" ]; then
+        touch ~/.petze/sysadmin.lock
+        echo -e "\033[91m🔓 SYSADMIN MODE ACTIVE. The agent can now access /etc/, ~/.ssh/, and root files.\033[0m"
+        echo -e "Run 'petze-demote' to revoke these privileges."
+    else
+        echo -e "\033[90mAborted.\033[0m"
+    fi
+}
+
+petze-demote() {
+    rm -f ~/.petze/sysadmin.lock
+    echo -e "\033[92m🔒 Sysadmin privileges revoked. Agent returned to standard sandbox.\033[0m"
 }
 """
 
@@ -828,3 +941,4 @@ open(os.path.join(petze_dir, "activity.log"), "a").close()
 print(f"\n{GREEN}🚀 INSTALLATION COMPLETE!{RESET}")
 print(f"{YELLOW}Important: Run this command right now to activate your new shell functions:{RESET}")
 print(f"source ~/{rc_file}\n")
+print(f"{YELLOW}For help type petze-help{RESET}")
