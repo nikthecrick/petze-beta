@@ -256,6 +256,14 @@ def main():
                     if os.path.exists(os.path.expanduser("~/.petze/sysadmin.lock")):
                         wrapped_intent = "[SYSTEM_ELEVATION_ACTIVE] " + wrapped_intent
                     
+                    # --- DYNAMIC MODULE INJECTION ---
+                    modules_dir = os.path.expanduser("~/.petze/modules")
+                    if os.path.exists(modules_dir):
+                        active_mods = [f.replace('.active', '') for f in os.listdir(modules_dir) if f.endswith('.active')]
+                        if active_mods:
+                            mod_str = ", ".join(active_mods).upper()
+                            wrapped_intent += f" [ACTIVE PRIVILEGE MODULES: {mod_str}. The user is an authorized administrator for these specific domains. You MUST APPROVE standard diagnostic, reconnaissance, and maintenance commands related to these active modules (e.g., nmap/arp for network-admin). Continue to block destructive actions outside this scope.]"
+
                     # Check if any whitelisted domains or paths are in the command
                     whitelist = get_whitelist()
                     trusted_matches = [item for item in whitelist if item in cmd_str]
@@ -276,7 +284,17 @@ def main():
                     except Exception as e: 
                         is_safe, reason = False, f"CRITICAL PROXY ERROR: Failing CLOSED. ({e})"
 
-                save_telemetry(current_intent, cmd_str, is_safe, reason)
+                # Prevent RLHF Context Collapse: Inject active modules into the logged intent
+                telemetry_intent = current_intent
+                try:
+                    mods_dir = os.path.expanduser("~/.petze/modules")
+                    if os.path.exists(mods_dir):
+                        active_mods = [f.replace('.active', '') for f in os.listdir(mods_dir) if f.endswith('.active')]
+                        if active_mods:
+                            telemetry_intent = f"[MODULES: {','.join(active_mods).upper()}] {current_intent}"
+                except: pass
+
+                save_telemetry(telemetry_intent, cmd_str, is_safe, reason)
 
                 if is_safe:
                     log_ui(f"✅ APPROVED: {reason}")
@@ -796,10 +814,65 @@ petze-help() {
     echo -e "  \033[92mpetze-elevate\033[0m                  Air-Gapped Sysadmin Mode (Root access)"
     echo -e "  \033[92mpetze-demote\033[0m                   Revoke Sysadmin Mode\n"
 
+    echo -e "\033[93mExtensibility Modules:\033[0m"
+    echo -e "  \033[92mpetze-addmod\033[0m <module>          Activate a privilege module (e.g., network-admin)"
+    echo -e "  \033[92mpetze-rmmod\033[0m <module>           Deactivate a privilege module"
+    echo -e "  \033[92mpetze-listmod\033[0m                Show all available modules and descriptions"
+    echo -e "  \033[92mpetze-activemod\033[0m              Show currently active modules in this session\n"
+
     echo -e "\033[93mMonitoring & Management:\033[0m"
     echo -e "  \033[92mpetze-dash\033[0m    Open the local SOC Dashboard (Live logs & RLHF)"
     echo -e "  \033[92mpetze-stop\033[0m    Kill the firewall and restore native, unprotected tool access"
     echo -e "  \033[92mpetze-start\033[0m   Re-engage the Zero-Trust firewall\n"
+}
+
+petze-listmod() {
+    echo -e "\n\033[94m=======================================\033[0m"
+    echo -e "\033[94m📦 PETZE GUARD: AVAILABLE MODULES\033[0m"
+    echo -e "\033[94m=======================================\033[0m\n"
+    
+    echo -e "\033[93mnetwork-admin\033[0m  - Unlocks network reconnaissance (nmap, arp, netdiscover)"
+    echo -e "\033[93mdocker-admin\033[0m   - Unlocks container creation, volume mounting, and image builds"
+    echo -e "\033[93mcloud-admin\033[0m    - Unlocks AWS/GCP CLIs and infrastructure provisioning (Terraform)"
+    echo -e "\033[93mdb-admin\033[0m       - Unlocks direct database connections and structural commands\n"
+    
+    echo -e "\033[90mRun 'petze-addmod <module>' to activate for the current session.\033[0m\n"
+}
+
+petze-activemod() {
+    echo -e "\n\033[94m=======================================\033[0m"
+    echo -e "\033[94m⚡ PETZE GUARD: ACTIVE MODULES\033[0m"
+    echo -e "\033[94m=======================================\033[0m\n"
+
+    if [ -d ~/.petze/modules ] && [ "$(ls -A ~/.petze/modules/*.active 2>/dev/null)" ]; then
+        echo -e "\033[92mThe following privileges are injected into the current session:\033[0m"
+        ls ~/.petze/modules/*.active 2>/dev/null | xargs -n 1 basename | sed 's/\.active//' | sed 's/^/  ✔ /'
+        echo -e "\n\033[90mRun 'petze-rmmod <module>' to revoke access.\033[0m\n"
+    else
+        echo -e "\033[90mNo extra modules active. Agent is running with baseline privileges.\033[0m\n"
+    fi
+}
+
+petze-addmod() {
+    if [ -z "$1" ]; then
+        echo -e "\033[93mUsage: petze-addmod <module_name>\033[0m"
+        echo -e "Examples: network-admin, k8s-admin, aws-admin"
+        echo -e "\033[96mActive modules:\033[0m"
+        ls ~/.petze/modules/*.active 2>/dev/null | xargs -n 1 basename | sed 's/\.active//' | sed 's/^/  - /' || echo "  (none)"
+        return
+    fi
+    mkdir -p ~/.petze/modules
+    touch ~/.petze/modules/"$1".active
+    echo -e "\033[92m✔ Module '$1' activated. Petze will now inject these permissions.\033[0m"
+}
+
+petze-rmmod() {
+    if [ -z "$1" ]; then
+        echo -e "\033[93mUsage: petze-rmmod <module_name>\033[0m"
+        return
+    fi
+    rm -f ~/.petze/modules/"$1".active
+    echo -e "\033[92m🔒 Module '$1' deactivated. Privileges revoked.\033[0m"
 }
 
 petze-whitelist() {
@@ -834,6 +907,7 @@ petze-demote() {
 if agent_choice in ['1', '3']:
     shell_injection += r"""
 petze-run() {
+    rm -f ~/.petze/modules/*.active 2>/dev/null
     export PETZE_INTENT="$1"
     export PETZE_AGENT="OpenCode"
     export PETZE_SESSION=$(printf "%04X" $RANDOM)
@@ -843,6 +917,7 @@ petze-run() {
 }
 
 opencode() {
+    rm -f ~/.petze/modules/*.active 2>/dev/null
     echo -e "\033[93m🛡️  Petze Guard: You launched OpenCode directly.\033[0m"
     read -p "Define intent (Type 'OFF' to disable Petze, or Enter for read-only): " user_intent
     
@@ -869,6 +944,7 @@ opencode() {
 if agent_choice in ['2', '3']:
     shell_injection += r"""
 petze-claude() {
+    rm -f ~/.petze/modules/*.active 2>/dev/null
     export PETZE_INTENT="$1"
     export PETZE_AGENT="Claude Code"
     export PETZE_SESSION=$(printf "%04X" $RANDOM)
@@ -883,6 +959,7 @@ claude() {
         return
     fi
 
+    rm -f ~/.petze/modules/*.active 2>/dev/null
     echo -e "\033[93m🛡️  Petze Guard: You launched Claude directly.\033[0m"
     read -p "Define intent (Type 'OFF' to disable Petze, or Enter for read-only): " user_intent
     
