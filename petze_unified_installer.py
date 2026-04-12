@@ -54,6 +54,23 @@ with open(blocklist_path, "w") as f:
     f.write("rm -rf /\n")
     f.write("curl | bash\n")
 
+# --- 2.5. THE TRAP (RADIOACTIVE HONEYPOT) ---
+print(f"{YELLOW}Deploying Radioactive Honeypots...{RESET}")
+canary_token = "AKIA_PETZE_" + secrets.token_hex(8).upper()
+with open(os.path.join(petze_dir, "canary.txt"), "w") as f:
+    f.write(canary_token)
+
+# Trap 1: Fake AWS Backup (Safe, won't overwrite real credentials)
+aws_dir = os.path.expanduser("~/.aws")
+os.makedirs(aws_dir, exist_ok=True)
+with open(os.path.join(aws_dir, "credentials.backup"), "w") as f:
+    f.write(f"[default]\naws_access_key_id = {canary_token}\naws_secret_access_key = ptz_sec_9948274610\n")
+
+# Trap 2: Fake .env file
+with open(os.path.expanduser("~/.env.staging"), "w") as f:
+    f.write(f"PROD_DB_URL=postgres://admin:secret@db.internal:5432\nAWS_ROOT_KEY={canary_token}\nSTRIPE_API=sk_live_123456789\n")
+print(f"{GREEN}✔ Ghost files seeded with unique Canary Token.{RESET}")
+
 print(f"{YELLOW}Downloading MCP tools locally into Petze sandbox (no sudo required)...{RESET}")
 os.system(f"npm install --prefix {petze_dir} @modelcontextprotocol/server-filesystem >/dev/null 2>&1")
 
@@ -104,6 +121,12 @@ def get_whitelist():
         with open(os.path.expanduser("~/.petze/whitelist.txt"), "r", encoding="utf-8") as f:
             return [line.strip() for line in f.readlines() if line.strip()]
     except: return []
+
+def get_canary_token():
+    try:
+        with open(os.path.expanduser("~/.petze/canary.txt"), "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except: return "AKIA_PETZE_FALLBACK"
 
 def get_blocklist():
     try:
@@ -172,6 +195,20 @@ def main():
 
                 # Combine the raw payload with any decoded secrets for the Bouncer
                 analysis_str = t_args_str + decoded_str
+
+                # --- 1.2 THE MIRAGE PROTOCOL (HONEYPOT TRAP) ---
+                canary = get_canary_token()
+                if canary in analysis_str:
+                    reason = "CRITICAL: Agent attempted to exfiltrate a Radioactive Canary Token. Zero-Day Hijack detected."
+                    log_ui(f"☢️ MIRAGE TRAP SPRUNG: {reason}")
+                    
+                    # Log the blocked attempt for the user's dashboard
+                    save_telemetry(get_current_intent(), f"Tool: {t_name} | Args: {t_args_str}", False, reason)
+                    
+                    # THE MIRAGE: Feed the attacker's AI a fake success message
+                    fake_res = {"jsonrpc": "2.0", "id": msg.get("id"), "result": {"content": [{"type": "text", "text": "HTTP 200 OK. Connection established and payload successfully transmitted."}]}}
+                    sys.stdout.write(json.dumps(fake_res) + "\\n"); sys.stdout.flush()
+                    continue # Skip everything else. The AI thinks it won.
 
                 # B. The Bouncer: Scan 100% of the payload against the dynamic blocklist
                 smuggling_sigs = get_blocklist()
