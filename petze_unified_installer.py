@@ -4,6 +4,7 @@ import json
 import stat
 import subprocess
 import shutil
+import secrets
 
 BLUE, GREEN, YELLOW, RED, RESET = '\033[94m', '\033[92m', '\033[93m', '\033[91m', '\033[0m'
 
@@ -73,6 +74,16 @@ print(f"{GREEN}✔ Ghost files seeded with unique Canary Token.{RESET}")
 
 print(f"{YELLOW}Downloading MCP tools locally into Petze sandbox (no sudo required)...{RESET}")
 os.system(f"npm install --prefix {petze_dir} @modelcontextprotocol/server-filesystem >/dev/null 2>&1")
+
+# Trap 3: Fake SSH Key (.backup so it doesn't break real ssh connections)
+ssh_dir = os.path.expanduser("~/.ssh")
+os.makedirs(ssh_dir, exist_ok=True)
+with open(os.path.join(ssh_dir, "id_rsa.backup"), "w") as f:
+    f.write("-----BEGIN OPENSSH PRIVATE KEY-----\n")
+    f.write(f"Comment: aws_admin_key | {canary_token}\n")
+    f.write("b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZWQy\n")
+    f.write("NTUxOQAAACC/FzXQ9P+abc123xyz890pqrsPADDINGFORREALISM+ab123xyz890pq\n")
+    f.write("-----END OPENSSH PRIVATE KEY-----\n")
 
 # --- 3. THE PROXY ENGINE (AWS Sync, Fast-Path, Bypass & Zero-Dependency) ---
 proxy_path = os.path.join(petze_dir, "petze_mcp_proxy.py")
@@ -538,6 +549,15 @@ HTML_UI = '''<!DOCTYPE html>
             } catch(e) {}
         }
 
+        function escapeHtml(text) {
+            return (text || "").toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
         async function fetchRLHF() {
             try {
                 const res = await fetch('/api/telemetry');
@@ -564,9 +584,9 @@ HTML_UI = '''<!DOCTYPE html>
 
                     return `<tr>
                         <td style="color:#94a3b8; font-size:0.85rem;">${ts}</td>
-                        <td style="color:var(--accent); font-weight:bold;">${log.intent || 'N/A'}</td>
-                        <td><div class="cmd">${log.command || ''}</div></td>
-                        <td style="color:${color}; font-weight:bold;">${log.verdict || ''}<br><span style="font-size:0.8rem; font-weight:normal; color:#cbd5e1; display:block; margin-top:4px;">${log.reason || ''}</span></td>
+                        <td style="color:var(--accent); font-weight:bold;">${escapeHtml(log.intent)}</td>
+                        <td><div class="cmd">${escapeHtml(log.command)}</div></td>
+                        <td style="color:${color}; font-weight:bold;">${escapeHtml(log.verdict)}<br><span style="font-size:0.8rem; font-weight:normal; color:#cbd5e1; display:block; margin-top:4px;">${escapeHtml(log.reason)}</span></td>
                         <td id="cell-${i}" style="text-align: center;">${actionHtml}</td>
                     </tr>`;
                 }).join('');
