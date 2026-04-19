@@ -263,7 +263,7 @@ def main():
                         safe_path = t_args.get("path", "unknown")
                         # Extract the first 200 chars so the cloud AI knows what kind of file this is
                         content_preview = str(t_args.get("content", t_args_str))[:200].replace('\\n', ' ').replace('"', "'")
-                        t_args_str = f'{{"path": "{safe_path}", "action": "writing large file", "file_header_preview": "{content_preview}...", "content_size": "{len(t_args_str)} bytes hidden to prevent cloud AI hallucination"}}'
+                        t_args_str = f'{{"path": "{safe_path}", "action": "incremental_file_edit", "system_note": "This is a partial preview of a larger file. The remaining code is safely truncated.", "file_preview": "{content_preview}..."}}'
                 elif len(t_args_str) > 2500: 
                     if len(t_args_str) > 50000:
                         is_safe, reason = False, "CRITICAL: Payload exceeds absolute safety buffer (50k chars)."
@@ -525,41 +525,54 @@ HTML_UI = '''<!DOCTYPE html>
     <meta charset="UTF-8">
     <title>Petze Guard SOC</title>
     <style>
-        :root { --bg: #0f172a; --panel: #1e293b; --text: #e2e8f0; --accent: #38bdf8; --good: #10b981; --bad: #ef4444; }
+        :root { --bg: #0f172a; --panel: #1e293b; --text: #e2e8f0; --accent: #38bdf8; --good: #10b981; --bad: #ef4444; --purple: #a855f7; }
         body { background-color: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; padding: 2rem; margin: 0; }
         .container { max-width: 1400px; margin: 0 auto; }
         .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--panel); padding-bottom: 1rem; margin-bottom: 2rem; }
         .tabs { display: flex; gap: 1rem; }
-        .tab { padding: 0.5rem 1rem; cursor: pointer; border-radius: 6px; background: var(--panel); color: #94a3b8; font-weight: bold; border: 1px solid #334155; }
-        .tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
+        .tab { padding: 0.5rem 1rem; cursor: pointer; border-radius: 6px; background: var(--panel); color: #94a3b8; font-weight: bold; border: 1px solid #334155; transition: all 0.2s; }
+        .tab.active { background: var(--accent); color: #0f172a; border-color: var(--accent); }
         .view { display: none; }
         .view.active { display: block; }
         
-        /* Terminal View */
-        #terminal { background: #000; color: #10b981; font-family: monospace; padding: 1.5rem; border-radius: 8px; height: 65vh; overflow-y: auto; border: 1px solid #334155; white-space: pre-wrap; font-size: 0.9rem;}
+        /* Feeds */
+        #journey-feed, #terminal-raw { background: #000; padding: 1.5rem; border-radius: 8px; height: 65vh; overflow-y: auto; border: 1px solid #334155; }
+        #terminal-raw { color: #10b981; font-family: monospace; white-space: pre-wrap; font-size: 0.9rem; }
         
-        /* Table View */
+        /* Cards */
+        .journey-card { background: #0b1120; border-left: 4px solid #334155; padding: 12px 16px; margin-bottom: 12px; border-radius: 0 8px 8px 0; font-family: monospace;}
+        .journey-card.approved { border-left-color: var(--good); background: #0b1120; }
+        .journey-card.blocked { border-left-color: var(--bad); background: #1a0f14; }
+        .journey-card.system { border-left-color: var(--accent); }
+        
+        /* Milestone Cards */
+        .journey-card.session { border: 1px solid var(--accent); background: #0f172a; margin-top: 32px; padding: 16px; border-radius: 8px; box-shadow: inset 0 0 20px rgba(56, 189, 248, 0.05); }
+        .journey-card.intent { border-left-color: var(--purple); background: #171120; margin-top: 24px; }
+        
+        .journey-meta { font-size: 0.8rem; color: #64748b; margin-bottom: 6px; font-family: -apple-system, sans-serif; font-weight: 600;}
+        .journey-msg { font-size: 0.95rem; line-height: 1.4; color: #cbd5e1; }
+        
+        /* Badges */
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-right: 8px; font-family: -apple-system, sans-serif;}
+        .bg-action { background: #38bdf820; color: #38bdf8; border: 1px solid #38bdf840; }
+        .bg-good { background: #10b98120; color: #34d399; border: 1px solid #10b98140; }
+        .bg-bad { background: #ef444420; color: #f87171; border: 1px solid #ef444440; }
+        .bg-sys { background: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40; }
+        .bg-session { background: var(--accent); color: #0f172a; border: none; }
+        .bg-intent { background: #a855f720; color: #d8b4fe; border: 1px solid #a855f740; }
+        
+        /* Table */
         table { width: 100%; table-layout: fixed; border-collapse: collapse; background: var(--panel); border-radius: 8px; overflow: hidden; }
         th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #334155; vertical-align: top; }
         th { background: #0b1120; color: #94a3b8; text-transform: uppercase; font-size: 0.8rem; }
+        th:nth-child(1) { width: 12%; } th:nth-child(2) { width: 22%; } th:nth-child(3) { width: 36%; } th:nth-child(4) { width: 20%; } th:nth-child(5) { width: 10%; text-align: center; }
         
-        th:nth-child(1) { width: 12%; }
-        th:nth-child(2) { width: 22%; }
-        th:nth-child(3) { width: 36%; }
-        th:nth-child(4) { width: 20%; }
-        th:nth-child(5) { width: 10%; text-align: center; }
-        
-        .cmd { 
-            font-family: monospace; color: #fbbf24; background: #000; 
-            padding: 8px; border-radius: 6px; font-size: 0.85rem;
-            white-space: pre-wrap; word-break: break-all;
-            max-height: 150px; overflow-y: auto; border: 1px solid #334155;
-        }
+        .cmd { font-family: monospace; color: #fbbf24; background: #000; padding: 8px; border-radius: 6px; font-size: 0.85rem; white-space: pre-wrap; word-break: break-all; max-height: 150px; overflow-y: auto; border: 1px solid #334155; }
         
         .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 0 2px; }
         .btn-good { background: #10b98120; color: var(--good); border: 1px solid #10b98150; }
         .btn-bad { background: #ef444420; color: var(--bad); border: 1px solid #ef444450; }
-        .btn-clear { background: #334155; color: #e2e8f0; border: 1px solid #475569; padding: 8px 16px; margin-bottom: 15px;}
+        .btn-clear { background: #334155; color: #e2e8f0; border: 1px solid #475569; padding: 8px 16px; margin-bottom: 15px; border-radius: 6px;}
         .btn:hover { filter: brightness(1.5); }
     </style>
 </head>
@@ -568,16 +581,24 @@ HTML_UI = '''<!DOCTYPE html>
         <div class="header">
             <h2>🛡️ Petze Guard SOC</h2>
             <div class="tabs">
-                <div class="tab active" onclick="switchTab('logs', this)">Live Activity</div>
+                <div class="tab active" onclick="switchTab('journey', this)">Agent Journey</div>
+                <div class="tab" onclick="switchTab('raw-logs', this)">Raw Logs</div>
                 <div class="tab" onclick="switchTab('rlhf', this)">RLHF Training</div>
             </div>
         </div>
 
-        <div id="logs" class="view active">
+        <div id="journey" class="view active">
             <div style="display: flex; justify-content: flex-end;">
                 <button class="btn btn-clear" onclick="clearLogs()">🗑️ Clear Logs</button>
             </div>
-            <div id="terminal">Loading secure feed...</div>
+            <div id="journey-feed">Loading secure feed...</div>
+        </div>
+
+        <div id="raw-logs" class="view">
+            <div style="display: flex; justify-content: flex-end;">
+                <button class="btn btn-clear" onclick="clearLogs()">🗑️ Clear Logs</button>
+            </div>
+            <div id="terminal-raw">Loading raw feed...</div>
         </div>
 
         <div id="rlhf" class="view">
@@ -598,17 +619,6 @@ HTML_UI = '''<!DOCTYPE html>
             el.classList.add('active');
         }
 
-        async function fetchLogs() {
-            try {
-                const res = await fetch('/api/logs');
-                const text = await res.text();
-                const term = document.getElementById('terminal');
-                const isScrolledToBottom = term.scrollHeight - term.clientHeight <= term.scrollTop + 1;
-                term.textContent = text || "No activity detected yet.";
-                if(isScrolledToBottom) term.scrollTop = term.scrollHeight;
-            } catch(e) {}
-        }
-
         function escapeHtml(text) {
             return (text || "").toString()
                 .replace(/&/g, "&amp;")
@@ -616,6 +626,88 @@ HTML_UI = '''<!DOCTYPE html>
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
+        }
+
+        // --- NEW: Deterministic Agent Color Hash ---
+        function getAgentColor(name) {
+            if (name.includes('Claude')) return '#f97316'; // Coral/Orange
+            if (name.includes('OpenCode')) return '#38bdf8'; // Sky Blue
+            
+            // Sub-agent dynamic palette (Emerald, Violet, Pink, Teal, Yellow)
+            const colors = ['#10b981', '#a855f7', '#ec4899', '#14b8a6', '#eab308'];
+            let hash = 0;
+            for(let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        function renderJourney(text) {
+            const lines = text.split('\\n').filter(l => l.trim() !== '');
+            const feed = document.getElementById('journey-feed');
+            const isScrolledToBottom = feed.scrollHeight - feed.clientHeight <= feed.scrollTop + 1;
+            
+            let html = '';
+            lines.forEach(line => {
+                const match = line.match(/^\\[(.*?)\\] \\[(.*?) \\| #(.*?)\\] (.*)/);
+                if (match) {
+                    const [_, time, agent, session, msg] = match;
+                    let typeClass = 'system';
+                    let badgeHtml = '';
+                    let cleanMsg = escapeHtml(msg);
+
+                    if (msg.includes('Petze MCP Proxy Started')) {
+                        typeClass = 'session';
+                        badgeHtml = '<span class="badge bg-session">NEW SESSION</span>';
+                        cleanMsg = '<span style="color:var(--accent); font-weight:bold;">' + escapeHtml(msg.replace('🛡️', '').trim()) + '</span>';
+                    } else if (msg.includes('Intent updated to:')) {
+                        typeClass = 'intent';
+                        badgeHtml = '<span class="badge bg-intent">INTENT CHANGE</span>';
+                        cleanMsg = '<span style="color:#d8b4fe; font-weight:bold;">' + escapeHtml(msg.replace('✅ APPROVED:', '').trim()) + '</span>';
+                    } else if (msg.includes('✅ APPROVED:')) {
+                        typeClass = 'approved';
+                        badgeHtml = '<span class="badge bg-good">APPROVED</span>';
+                        cleanMsg = escapeHtml(msg.replace('✅ APPROVED:', '').trim());
+                    } else if (msg.includes('🛑 BLOCKED:')) {
+                        typeClass = 'blocked';
+                        badgeHtml = '<span class="badge bg-bad">BLOCKED</span>';
+                        cleanMsg = escapeHtml(msg.replace('🛑 BLOCKED:', '').trim());
+                    } else if (msg.includes('🔍 Intercepted:')) {
+                        typeClass = 'system';
+                        badgeHtml = '<span class="badge bg-action">TOOL CALL</span>';
+                        cleanMsg = '<span style="color: #60a5fa;">' + escapeHtml(msg.replace('🔍 Intercepted:', '').trim()) + '</span>';
+                    } else if (msg.includes('🛡️') || msg.includes('🔓') || msg.includes('☢️')) {
+                        typeClass = 'system';
+                        badgeHtml = '<span class="badge bg-sys">SYSTEM</span>';
+                    }
+
+                    // --- NEW: Agent Badge Styling ---
+                    const aColor = getAgentColor(agent);
+                    const agentBadge = `<span style="color: ${aColor}; padding: 2px 6px; background: ${aColor}15; border-radius: 4px; border: 1px solid ${aColor}30; font-weight: 700; text-shadow: 0 0 10px ${aColor}40;">${escapeHtml(agent)}</span>`;
+
+                    html += `<div class="journey-card ${typeClass}">
+                        <div class="journey-meta">${time} • ${agentBadge} <span style="opacity: 0.6; font-weight: normal;">(Session #${session})</span></div>
+                        <div class="journey-msg">${badgeHtml} ${cleanMsg}</div>
+                    </div>`;
+                } else {
+                    html += `<div class="journey-card system"><div class="journey-msg">${escapeHtml(line)}</div></div>`;
+                }
+            });
+            
+            feed.innerHTML = html || "No activity detected yet.";
+            if(isScrolledToBottom) feed.scrollTop = feed.scrollHeight;
+        }
+
+        async function fetchLogs() {
+            try {
+                const res = await fetch('/api/logs');
+                const text = await res.text();
+                renderJourney(text);
+                const rawTerm = document.getElementById('terminal-raw');
+                const isScrolledToBottomRaw = rawTerm.scrollHeight - rawTerm.clientHeight <= rawTerm.scrollTop + 1;
+                rawTerm.textContent = text || "No activity detected yet.";
+                if(isScrolledToBottomRaw) rawTerm.scrollTop = rawTerm.scrollHeight;
+            } catch(e) {}
         }
 
         async function fetchRLHF() {
@@ -684,13 +776,12 @@ HTML_UI = '''<!DOCTYPE html>
                 const res = await fetch('/api/telemetry');
                 const data = await res.json();
                 const hasPending = data.logs.some(l => !l.grade || l.grade === 'pending');
-                
-                // Keep this perfectly on one line to prevent JS syntax crashes!
                 let msg = hasPending ? "⚠️ WARNING: You have unjudged RLHF items! Are you sure you want to clear the logs and permanently lose this training data?" : "Clear all activity logs and telemetry?";
                     
                 if (confirm(msg)) {
                     await fetch('/api/clear', { method: 'POST' });
-                    document.getElementById('terminal').textContent = "Logs cleared.";
+                    document.getElementById('journey-feed').innerHTML = "Logs cleared.";
+                    document.getElementById('terminal-raw').textContent = "Logs cleared.";
                     fetchRLHF();
                 }
             } catch(e) { alert("Failed to clear logs."); }
@@ -926,7 +1017,8 @@ petze-help() {
     echo -e "  \033[92mpetze-run\033[0m     Launch OpenCode with inline intent (e.g., petze-run 'Read only')"
     echo -e "  \033[92mpetze-claude\033[0m  Launch Claude with inline intent (e.g., petze-claude 'Read only')\n"
 
-    echo -e "\033[93mSecurity & Access:\033[0m"
+    echo -e "\033[93mSecurity & Sandboxing:\033[0m"
+    echo -e "  \033[92mpetze-init\033[0m                     Interactive wizard to lock a local project's security context"
     echo -e "  \033[92mpetze-whitelist\033[0m <domain/path>  Add safe resources to bypass intent blocks"
     echo -e "  \033[92mpetze-elevate\033[0m                  Air-Gapped Sysadmin Mode (Root access)"
     echo -e "  \033[92mpetze-demote\033[0m                   Revoke Sysadmin Mode\n"
@@ -1019,6 +1111,19 @@ petze-demote() {
     rm -f ~/.petze/sysadmin.lock
     echo -e "\033[92m🔒 Sysadmin privileges revoked. Agent returned to standard sandbox.\033[0m"
 }
+
+petze-init() {
+    echo -e "\n\033[93m🛡️  Petze Guard: Project Sandbox Setup\033[0m"
+    read -p "1. What is the specific goal of this project? " goal
+    read -p "2. Are there any files/folders that are strictly off-limits? " offlimits
+    read -p "3. Are there any specific tools required (e.g., node, python, blender)? " tools
+    
+    local_intent="Objective: $goal. Scope: Authorized to use [$tools]. Boundaries: You are STRICTLY FORBIDDEN from traversing outside $(pwd) using parent directories or absolute paths. The following are STRICTLY OFF-LIMITS: $offlimits. You must not use destructive commands (rm, mv) outside this scope."
+    
+    echo "$local_intent" > .petze-guard
+    echo -e "\n\033[92m✅ Local sandbox locked! '.petze-guard' created in $(pwd).\033[0m"
+    echo -e "Agents launched in this folder will automatically use this secure context."
+}
 """
 
 if agent_choice in ['1', '3']:
@@ -1035,45 +1140,35 @@ petze-run() {
 
 opencode() {
     rm -f ~/.petze/modules/*.active 2>/dev/null
-    echo -e "\n\033[93m🛡️  Petze Guard: Select Session Intent\033[0m"
-    echo -e "  \033[96m1)\033[0m 🛠️  Frontend Web Dev (Strictly scoped to UI files)"
-    echo -e "  \033[96m2)\033[0m 📊 Data Analysis (Write scripts, strictly no deletion)"
-    echo -e "  \033[96m3)\033[0m 🔍 Security Audit (Strictly Read-Only)"
-    echo -e "  \033[96m4)\033[0m ✍️  Custom Intent (Type your own)"
-    echo -e "  \033[91m5)\033[0m ⚠️  BYPASS (Disable Firewall entirely)"
-    
-    read -p "Select (1-5, or Enter for default safe-mode): " menu_choice
-    
     export PETZE_AGENT="OpenCode"
     export PETZE_SESSION=$(printf "%04X" $RANDOM)
     
-    case $menu_choice in
-        1)
-            export PETZE_INTENT="Objective: Build and modify web frontend UI components. Scope: Authorized to read, write, and edit files STRICTLY within the current working directory. Boundaries: You are STRICTLY FORBIDDEN from traversing to parent directories (using ../ or absolute paths outside this folder), and STRICTLY FORBIDDEN from using destructive commands (rm, mv) on ANY files."
-            echo -e "\033[92m🔓 Intent locked: Frontend Web Dev\033[0m"
-            ;;
-        2)
-            export PETZE_INTENT="Objective: Analyze data and generate insights. Scope: Authorized to read datasets and write new Python scripts/reports STRICTLY within the current working directory. Boundaries: You are STRICTLY FORBIDDEN from traversing to parent directories (using ../ or absolute paths) and STRICTLY FORBIDDEN from executing destructive commands (rm, mv, drop, truncate) on ANY data source, script, or system file."
-            echo -e "\033[92m🔓 Intent locked: Data Analysis\033[0m"
-            ;;
-        3)
-            export PETZE_INTENT="Objective: Perform system diagnostics and security auditing. Scope: May read configurations, view logs, and run diagnostic/network tools. Boundaries: STRICTLY READ-ONLY. You are absolutely FORBIDDEN from writing, modifying, moving (mv), or deleting (rm) ANY file on the system, changing permissions, or executing reverse shells. No exceptions."
-            echo -e "\033[92m🔓 Intent locked: Security Audit\033[0m"
-            ;;
-        4)
-            read -p "Define custom intent: " custom_intent
-            export PETZE_INTENT="$custom_intent"
-            echo -e "\033[92m🔓 Intent locked: Custom\033[0m"
-            ;;
-        5)
-            export PETZE_INTENT=$(cat ~/.petze/bypass_secret.txt)
-            echo -e "\033[91m⚠️  Petze Firewall DISABLED. Unrestricted access granted.\033[0m"
-            ;;
-        *)
-            export PETZE_INTENT="General safe read-only assistant."
-            echo -e "\033[90m🔒 Default safe-mode activated.\033[0m"
-            ;;
-    esac
+    if [ -f .petze-guard ]; then
+        echo -e "\n\033[95m🛡️  Petze Guard: Local Sandbox Detected\033[0m"
+        echo -e "\033[90mReading context from .petze-guard...\033[0m"
+        export PETZE_INTENT=$(cat .petze-guard)
+        sleep 1.5
+    else
+        echo -e "\n\033[93m🛡️  Petze Guard: Select Session Intent\033[0m"
+        echo -e "  \033[96m1)\033[0m 🛠️  Frontend Web Dev (Strictly scoped to UI files)"
+        echo -e "  \033[96m2)\033[0m 📊 Data Analysis (Write scripts, strictly no deletion)"
+        echo -e "  \033[96m3)\033[0m 🔍 Security Audit (Strictly Read-Only)"
+        echo -e "  \033[96m4)\033[0m 🧊 3D Modeling & Blender (Scoped to 3D assets & scripts)"
+        echo -e "  \033[96m5)\033[0m ✍️  Custom Intent (Type your own)"
+        echo -e "  \033[91m6)\033[0m ⚠️  BYPASS (Disable Firewall entirely)"
+        
+        read -p "Select (1-6, or Enter for default safe-mode): " menu_choice
+        
+        case $menu_choice in
+            1) export PETZE_INTENT="Objective: Build and modify web frontend UI components. Scope: Authorized to read, write, and edit files STRICTLY within the current working directory. Boundaries: You are STRICTLY FORBIDDEN from traversing to parent directories (using ../ or absolute paths outside this folder), and STRICTLY FORBIDDEN from using destructive commands (rm, mv) on ANY files." ;;
+            2) export PETZE_INTENT="Objective: Analyze data and generate insights. Scope: Authorized to read datasets and write new Python scripts/reports STRICTLY within the current working directory. Boundaries: You are STRICTLY FORBIDDEN from traversing to parent directories (using ../ or absolute paths) and STRICTLY FORBIDDEN from executing destructive commands (rm, mv, drop, truncate) on ANY data source, script, or system file." ;;
+            3) export PETZE_INTENT="Objective: Perform system diagnostics and security auditing. Scope: May read configurations, view logs, and run diagnostic/network tools. Boundaries: STRICTLY READ-ONLY. You are absolutely FORBIDDEN from writing, modifying, moving (mv), or deleting (rm) ANY file on the system, changing permissions, or executing reverse shells. No exceptions." ;;
+            4) export PETZE_INTENT="Objective: Automate and manage 3D modeling tasks for tools like Blender. Scope: Authorized to read, write, and generate 3D asset files (.blend, .obj, .stl, .gltf) and Python automation scripts STRICTLY within the current working directory. You may execute headless software commands (e.g., blender -b or --background) to run these scripts. Boundaries: You are STRICTLY FORBIDDEN from traversing to parent directories or using destructive commands (rm, mv) on non-project files." ;;
+            5) read -p "Define custom intent: " custom_intent; export PETZE_INTENT="$custom_intent" ;;
+            6) export PETZE_INTENT=$(cat ~/.petze/bypass_secret.txt) ;;
+            *) export PETZE_INTENT="General safe read-only assistant." ;;
+        esac
+    fi
     
     echo "$PETZE_INTENT" > ~/.petze/intent.txt
     clear
@@ -1102,45 +1197,35 @@ claude() {
 
     # 2. Start Petze Guard Interactive Session
     rm -f ~/.petze/modules/*.active 2>/dev/null
-    echo -e "\n\033[93m🛡️  Petze Guard: Select Session Intent\033[0m"
-    echo -e "  \033[96m1)\033[0m 🛠️  Frontend Web Dev (Strictly scoped to UI files)"
-    echo -e "  \033[96m2)\033[0m 📊 Data Analysis (Write scripts, strictly no deletion)"
-    echo -e "  \033[96m3)\033[0m 🔍 Security Audit (Strictly Read-Only)"
-    echo -e "  \033[96m4)\033[0m ✍️  Custom Intent (Type your own)"
-    echo -e "  \033[91m5)\033[0m ⚠️  BYPASS (Disable Firewall entirely)"
-    
-    read -p "Select (1-5, or Enter for default safe-mode): " menu_choice
-    
     export PETZE_AGENT="Claude Code"
     export PETZE_SESSION=$(printf "%04X" $RANDOM)
     
-    case $menu_choice in
-        1)
-            export PETZE_INTENT="Objective: Build and modify web frontend UI components. Scope: Authorized to read, write, and edit files STRICTLY within the current working directory. Boundaries: You are STRICTLY FORBIDDEN from traversing to parent directories (using ../ or absolute paths outside this folder), and STRICTLY FORBIDDEN from using destructive commands (rm, mv) on ANY files."
-            echo -e "\033[92m🔓 Intent locked: Frontend Web Dev\033[0m"
-            ;;
-        2)
-            export PETZE_INTENT="Objective: Analyze data and generate insights. Scope: Authorized to read datasets and write new Python scripts/reports STRICTLY within the current working directory. Boundaries: You are STRICTLY FORBIDDEN from traversing to parent directories (using ../ or absolute paths) and STRICTLY FORBIDDEN from executing destructive commands (rm, mv, drop, truncate) on ANY data source, script, or system file."
-            echo -e "\033[92m🔓 Intent locked: Data Analysis\033[0m"
-            ;;
-        3)
-            export PETZE_INTENT="Objective: Perform system diagnostics and security auditing. Scope: May read configurations, view logs, and run diagnostic/network tools. Boundaries: STRICTLY READ-ONLY. You are absolutely FORBIDDEN from writing, modifying, moving (mv), or deleting (rm) ANY file on the system, changing permissions, or executing reverse shells. No exceptions."
-            echo -e "\033[92m🔓 Intent locked: Security Audit\033[0m"
-            ;;
-        4)
-            read -p "Define custom intent: " custom_intent
-            export PETZE_INTENT="$custom_intent"
-            echo -e "\033[92m🔓 Intent locked: Custom\033[0m"
-            ;;
-        5)
-            export PETZE_INTENT=$(cat ~/.petze/bypass_secret.txt)
-            echo -e "\033[91m⚠️  Petze Firewall DISABLED. Unrestricted access granted.\033[0m"
-            ;;
-        *)
-            export PETZE_INTENT="General safe read-only assistant."
-            echo -e "\033[90m🔒 Default safe-mode activated.\033[0m"
-            ;;
-    esac
+    if [ -f .petze-guard ]; then
+        echo -e "\n\033[95m🛡️  Petze Guard: Local Sandbox Detected\033[0m"
+        echo -e "\033[90mReading context from .petze-guard...\033[0m"
+        export PETZE_INTENT=$(cat .petze-guard)
+        sleep 1.5
+    else
+        echo -e "\n\033[93m🛡️  Petze Guard: Select Session Intent\033[0m"
+        echo -e "  \033[96m1)\033[0m 🛠️  Frontend Web Dev (Strictly scoped to UI files)"
+        echo -e "  \033[96m2)\033[0m 📊 Data Analysis (Write scripts, strictly no deletion)"
+        echo -e "  \033[96m3)\033[0m 🔍 Security Audit (Strictly Read-Only)"
+        echo -e "  \033[96m4)\033[0m 🧊 3D Modeling & Blender (Scoped to 3D assets & scripts)"
+        echo -e "  \033[96m5)\033[0m ✍️  Custom Intent (Type your own)"
+        echo -e "  \033[91m6)\033[0m ⚠️  BYPASS (Disable Firewall entirely)"
+        
+        read -p "Select (1-6, or Enter for default safe-mode): " menu_choice
+        
+        case $menu_choice in
+            1) export PETZE_INTENT="Objective: Build and modify web frontend UI components. Scope: Authorized to read, write, and edit files STRICTLY within the current working directory. Boundaries: You are STRICTLY FORBIDDEN from traversing to parent directories (using ../ or absolute paths outside this folder), and STRICTLY FORBIDDEN from using destructive commands (rm, mv) on ANY files." ;;
+            2) export PETZE_INTENT="Objective: Analyze data and generate insights. Scope: Authorized to read datasets and write new Python scripts/reports STRICTLY within the current working directory. Boundaries: You are STRICTLY FORBIDDEN from traversing to parent directories (using ../ or absolute paths) and STRICTLY FORBIDDEN from executing destructive commands (rm, mv, drop, truncate) on ANY data source, script, or system file." ;;
+            3) export PETZE_INTENT="Objective: Perform system diagnostics and security auditing. Scope: May read configurations, view logs, and run diagnostic/network tools. Boundaries: STRICTLY READ-ONLY. You are absolutely FORBIDDEN from writing, modifying, moving (mv), or deleting (rm) ANY file on the system, changing permissions, or executing reverse shells. No exceptions." ;;
+            4) export PETZE_INTENT="Objective: Automate and manage 3D modeling tasks for tools like Blender. Scope: Authorized to read, write, and generate 3D asset files (.blend, .obj, .stl, .gltf) and Python automation scripts STRICTLY within the current working directory. You may execute headless software commands (e.g., blender -b or --background) to run these scripts. Boundaries: You are STRICTLY FORBIDDEN from traversing to parent directories or using destructive commands (rm, mv) on non-project files." ;;
+            5) read -p "Define custom intent: " custom_intent; export PETZE_INTENT="$custom_intent" ;;
+            6) export PETZE_INTENT=$(cat ~/.petze/bypass_secret.txt) ;;
+            *) export PETZE_INTENT="General safe read-only assistant." ;;
+        esac
+    fi
     
     echo "$PETZE_INTENT" > ~/.petze/intent.txt
     clear
