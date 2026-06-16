@@ -1885,8 +1885,8 @@ profile_path = os.path.expanduser(f"~/{profile_file}")
 
 # 7a. Construct the injection payload
 shell_injection = "\n# --- PETZE GUARD GLOBAL COMMANDS ---\n"
-shell_injection += f'alias petze-dash-t="{os.path.join(petze_dir, "petze-dash-t")}\n"'
-shell_injection += f'alias petze-dash="{os.path.join(petze_dir, "petze-dash")}"\n'
+shell_injection += f'alias petze-dash-t="python3 {os.path.join(petze_dir, "petze-dash-t")}\n"'
+shell_injection += f'alias petze-dash="python3 {os.path.join(petze_dir, "petze-dash")}"\n'
 shell_injection += f'alias petze-stop="{os.path.join(petze_dir, "petze-stop")}"\n'
 shell_injection += f'alias petze-start="{os.path.join(petze_dir, "petze-start")}"\n'
 shell_injection += f'alias petze-help="petze-help"\n'
