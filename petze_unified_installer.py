@@ -1952,6 +1952,7 @@ petze-help() {
 
     echo -e "\033[93mSecurity & Access:\033[0m"
     echo -e "  \033[92mpetze-whitelist\033[0m <domain/path>  Add safe resources to bypass intent blocks"
+    echo -e "  \\033[92mpetze-unwhitelist\\033[0m <domain/path>  Remove a resource from the whitelist"
     echo -e "  \033[92mpetze-elevate\033[0m                  Air-Gapped Sysadmin Mode (Root access)"
     echo -e "  \033[92mpetze-demote\033[0m                   Revoke Sysadmin Mode\n"
 
@@ -2029,6 +2030,25 @@ petze-whitelist() {
     fi
     echo "$1" >> ~/.petze/whitelist.txt
     echo -e "\033[92m✔ Added '$1' to Petze Firewall whitelist.\033[0m"
+}
+
+petze-unwhitelist() {
+    if [ -z "$1" ]; then
+        echo -e "\033[93mUsage: petze-unwhitelist <domain_or_path>\033[0m"
+        return
+    fi
+    if [ ! -f ~/.petze/whitelist.txt ]; then
+        echo -e "\033[93m⚠ Whitelist is empty.\033[0m"
+        return
+    fi
+    if grep -qxF "$1" ~/.petze/whitelist.txt; then
+        grep -vxF "$1" ~/.petze/whitelist.txt > ~/.petze/whitelist.tmp && mv ~/.petze/whitelist.tmp ~/.petze/whitelist.txt
+        echo -e "\033[92m✔ Removed '$1' from Petze Firewall whitelist.\033[0m"
+    else
+        echo -e "\033[93m⚠ '$1' not found in whitelist.\033[0m"
+        echo -e "Current entries:"
+        cat ~/.petze/whitelist.txt 2>/dev/null || echo "  (empty)"
+    fi
 }
 
 petze-elevate() {
