@@ -1934,6 +1934,7 @@ shell_injection += f'alias petze-dash-t="python3 {os.path.join(petze_dir, "petze
 shell_injection += f'alias petze-dash="python3 {os.path.join(petze_dir, "petze-dash")}"\n'
 shell_injection += f'alias petze-stop="{os.path.join(petze_dir, "petze-stop")}"\n'
 shell_injection += f'alias petze-start="{os.path.join(petze_dir, "petze-start")}"\n'
+shell_injection += 'alias petze-status="petze-status"\n'
 shell_injection += f'alias petze-help="petze-help"\n'
 
 # The Help & Whitelist Commands
@@ -1963,10 +1964,10 @@ petze-help() {
     echo -e "  \033[92mpetze-activemod\033[0m              Show currently active modules in this session\n"
 
     echo -e "\033[93mMonitoring & Management:\033[0m"
-    echo -e "  \033[92mpetze-dash\033[0m    Open the local SOC Dashboard (Live logs & RLHF)"
     echo -e "  \\033[92mpetze-dash-t\\033[0m  Open the Terminal Dashboard (headless / SSH)"
     echo -e "  \033[92mpetze-stop\033[0m    Kill the firewall and restore native, unprotected tool access"
     echo -e "  \033[92mpetze-start\033[0m   Re-engage the Zero-Trust firewall\n"
+    echo -e "  \\033[92mpetze-status\\033[0m Show firewall status, intent and active modules"
 }
 
 petze-listmod() {
@@ -2049,6 +2050,79 @@ petze-unwhitelist() {
         echo -e "Current entries:"
         cat ~/.petze/whitelist.txt 2>/dev/null || echo "  (empty)"
     fi
+}
+
+petze-status() {
+    echo -e "\n\033[94m=======================================\033[0m"
+    echo -e "\033[94m🛡️  PETZE GUARD: STATUS\033[0m"
+    echo -e "\033[94m=======================================\033[0m"
+
+    if [ -f ~/.petze/.disabled ]; then
+        echo -e "\n  \033[91m● STOPPED\033[0m  Firewall is down — agents running natively"
+        echo -e "  \033[90mRun 'petze-start' to re-engage.\033[0m\n"
+    else
+        echo -e "\n  \033[92m● ACTIVE\033[0m   Zero-trust sandbox engaged"
+
+        if command -v python3 &>/dev/null && [ -f ~/.claude.json ]; then
+            MCP_CHECK=$(python3 -c "
+import json
+try:
+    c = json.load(open('$HOME/.claude.json'))
+    mcps = c.get('mcpServers', {})
+    if 'petze-filesystem' in mcps and 'petze-sandbox' in mcps:
+        print('claude:ok')
+    else:
+        print('claude:missing')
+except:
+    print('claude:unknown')
+" 2>/dev/null)
+            if [[ "$MCP_CHECK" == "claude:ok" ]]; then
+                echo -e "  \033[90mClaude Code    MCP proxy registered ✓\033[0m"
+            else
+                echo -e "  \033[93mClaude Code    MCP proxy not found — run petze-start\033[0m"
+            fi
+        fi
+
+        if [ -f ~/.config/opencode/opencode.jsonc ]; then
+            if grep -q "petze" ~/.config/opencode/opencode.jsonc 2>/dev/null; then
+                echo -e "  \033[90mOpenCode       MCP proxy registered ✓\033[0m"
+            else
+                echo -e "  \033[93mOpenCode       MCP proxy not found — run petze-start\033[0m"
+            fi
+        fi
+
+        INTENT=$(cat ~/.petze/intent.txt 2>/dev/null | head -1)
+        if [ -n "$INTENT" ]; then
+            SHORT_INTENT="${INTENT:0:60}"
+            if [ ${#INTENT} -gt 60 ]; then SHORT_INTENT="${SHORT_INTENT}..."; fi
+            echo -e "\n  \033[96mIntent\033[0m     $SHORT_INTENT"
+        else
+            echo -e "\n  \033[90mIntent     (no active session)\033[0m"
+        fi
+
+        if [ -d ~/.petze/modules ] && ls ~/.petze/modules/*.active 2>/dev/null | grep -q .; then
+            MODS=$(ls ~/.petze/modules/*.active 2>/dev/null | xargs -n1 basename | sed 's/\.active//' | tr '\n' ' ')
+            echo -e "  \033[96mModules\033[0m    $MODS"
+        else
+            echo -e "  \033[90mModules    (none active)\033[0m"
+        fi
+
+        WL_COUNT=$(grep -c "" ~/.petze/whitelist.txt 2>/dev/null || echo 0)
+        if [ "$WL_COUNT" -gt 0 ]; then
+            echo -e "  \033[90mWhitelist  $WL_COUNT domain(s) — run 'petze-whitelist' to view\033[0m"
+        fi
+    fi
+
+    if [ -f ~/.petze/activity.log ]; then
+        LAST=$(tail -1 ~/.petze/activity.log 2>/dev/null)
+        if [ -n "$LAST" ]; then
+            SHORT_LAST="${LAST:0:72}"
+            if [ ${#LAST} -gt 72 ]; then SHORT_LAST="${SHORT_LAST}..."; fi
+            echo -e "\n  \033[90mLast seen  $SHORT_LAST\033[0m"
+        fi
+    fi
+
+    echo -e "\033[94m=======================================\033[0m\n"
 }
 
 petze-elevate() {
