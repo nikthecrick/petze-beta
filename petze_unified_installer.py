@@ -1836,14 +1836,15 @@ echo -e "\\033[93mInitiating Petze Firewall Shutdown...\\033[0m"
 
 if [ -f ~/.config/opencode/opencode.jsonc ]; then
     cp ~/.config/opencode/opencode.jsonc ~/.config/opencode/opencode.jsonc.petze
-fi
-if [ -f ~/.config/opencode/opencode.jsonc.original ]; then
-    cp ~/.config/opencode/opencode.jsonc.original ~/.config/opencode/opencode.jsonc
-    echo -e "\\033[90m - OpenCode reverted to original user config.\\033[0m"
-else
-    # No original backup — write a minimal clean config with no Petze MCPs
-    echo '{"model": "opencode/big-pickle", "share": "disabled", "mcp": {}}' > ~/.config/opencode/opencode.jsonc
-    echo -e "\\033[90m - OpenCode Petze MCPs removed (minimal clean config written).\\033[0m"
+    python3 -c "
+import json
+path = '$HOME/.config/opencode/opencode.jsonc'
+with open(path) as f: config = json.load(f)
+config.get('mcp', {}).pop('petze-filesystem', None)
+config.get('mcp', {}).pop('petze-sandbox', None)
+with open(path, 'w') as f: json.dump(config, f, indent=2)
+"
+    echo -e "\\033[90m - Petze MCPs removed from OpenCode config.\\033[0m"
 fi
 
 if [ -f ~/.claude/settings.json ]; then
