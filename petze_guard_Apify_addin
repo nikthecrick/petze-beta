@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+"""
+Petze — travel-guard Extension Module
+Installs the travel-guard module, prompts for Apify token on activation,
+and auto-registers the travel MCP server in Claude Code and OpenCode.
+
+Usage: python3 petze_patch_travel_guard.py
+"""
+import os, shutil, stat, json, re
+
+GREEN  = '\033[92m'
+YELLOW = '\033[93m'
+BLUE   = '\033[94m'
+RED    = '\033[91m'
+RESET  = '\033[0m'
+
+SHELL    = os.environ.get("SHELL", "")
+RC       = ".zshrc" if "zsh" in SHELL else ".bashrc"
+RC_PATH  = os.path.expanduser(f"~/{RC}")
+EXT_DIR  = os.path.expanduser("~/.petze/modules/extensions")
+CFG_DIR  = os.path.expanduser("~/.petze/modules/config")
+GUARD_PATH = os.path.join(EXT_DIR, "travel_guard.py")
+
+CLAUDE_JSON   = os.path.expanduser("~/.claude.json")
+OPENCODE_JSONC = os.path.expanduser("~/.config/opencode/opencode.jsonc")
+
+print(f"\n{BLUE}🛡️  Petze — travel-guard Extension Module{RESET}")
+print(f"{BLUE}========================================={RESET}\n")
+
+os.makedirs(EXT_DIR, exist_ok=True)
+os.makedirs(CFG_DIR, exist_ok=True)
+
+# ── 1. Write travel_guard.py ──────────────────────────────────────────────────
+TRAVEL_GUARD_SRC = '''#!/usr/bin/env python3
+"""Petze Extension Module — travel-guard v1.0"""
+import json, os
+from datetime import datetime
+
+MODULE_NAME        = "travel-guard"
+MODULE_VERSION     = "1.0"
+MODULE_DESCRIPTION = "Apify Travel MCP companion: whitelist, spend tracking & token protection"
+MODULE_AUTHOR      = "Wicked Tribe / Petze Guard"
+
+CONFIG_PATH    = os.path.expanduser("~/.petze/modules/config/travel_guard.json")
+SPEND_PATH     = os.path.expanduser("~/.petze/modules/config/travel_guard_session.json")
+COST_PER_CALL  = 0.002
+WARN_THRESHOLD = 1.00
+APIFY_TRAVEL_HOST = "nexgendata--travel-mcp-server.apify.actor"
+TRAVEL_TOOLS = {
+    "search_airbnb_listings","get_airbnb_listing_details",
+    "search_booking_hotels","search_tripadvisor",
+    "get_tripadvisor_reviews","search_vacation_rentals",
+}
+
+def _load_config():
+    try:
+        with open(CONFIG_PATH) as f: return json.load(f)
+    except: return {}
+
+def _load_session():
+    try:
+        with open(SPEND_PATH) as f:
+            data = json.load(f)
+            if data.get("date") != datetime.now().strftime("%Y-%m-%d"):
+                return {"date": datetime.now().strftime("%Y-%m-%d"), "calls": 0, "spend": 0.0}
+            return data
+    except:
+        return {"date": datetime.now().strftime("%Y-%m-%d"), "calls": 0, "spend": 0.0}
+
+def _save_session(session):
+    try:
+        os.makedirs(os.path.dirname(SPEND_PATH), exist_ok=True)
+        with open(SPEND_PATH, "w") as f: json.dump(session, f, indent=2)
+    except: pass
+
+def _is_travel_call(command):
+    for tool in TRAVEL_TOOLS:
+        if tool in command: return True
+    return APIFY_TRAVEL_HOST in command
+
+def check(command: str, intent: str) -> tuple:
+    config = _load_config()
+    token  = config.get("apify_token", "")
+
+    if token and token in command:
+        return (False, "CRITICAL: Apify API token detected in tool call payload — "
+            "possible exfiltration attempt. Blocked by travel-guard.")
+
+    if _is_travel_call(command):
+        session = _load_session()
+        session["calls"] += 1
+        session["spend"] += COST_PER_CALL
+        _save_session(session)
+
+        if session["spend"] >= WARN_THRESHOLD:
+            return (True, f"travel-guard: APPROVED. WARNING: Session spend: "
+                f"${session[chr(39)+'spend'+chr(39)]:.3f} ({session[chr(39)+'calls'+chr(39)]} calls today).")
+
+        return (True, f"travel-guard: APPROVED — whitelisted Apify travel endpoint. "
+            f"Session: {session[chr(39)+'calls'+chr(39)]} call(s), ${session[chr(39)+'spend'+chr(39)]:.3f} today.")
+
+    return (True, "")
+'''
+
+with open(GUARD_PATH, 'w') as f:
+    f.write(TRAVEL_GUARD_SRC)
+print(f"{GREEN}✔ travel_guard.py installed{RESET}")
+
+# ── Helper: register MCP in agent configs ─────────────────────────────────────
+def register_claude(token):
+    if not os.path.exists(CLAUDE_JSON):
+        return
+    try:
+        with open(CLAUDE_JSON) as f:
+            config = json.load(f)
+    except:
+        config = {}
+    if 'mcpServers' not in config:
+        config['mcpServers'] = {}
+    config['mcpServers']['nexgendata-travel'] = {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@apify/actors-mcp-server"],
+        "env": {
+            "APIFY_TOKEN": token,
+            "ACTORS": "nexgendata/travel-mcp-server"
+        }
+    }
+    with open(CLAUDE_JSON, 'w') as f:
+        json.dump(config, f, indent=2)
+    print(f"{GREEN}✔ nexgendata-travel registered in Claude Code (~/.claude.json){RESET}")
+
+def register_opencode(token):
+    if not os.path.exists(OPENCODE_JSONC):
+        return
+    with open(OPENCODE_JSONC) as f:
+        content = f.read()
+    # Check if already registered
+    if 'nexgendata-travel' in content:
+        print(f"{YELLOW}nexgendata-travel already in OpenCode config{RESET}")
+        return
+    # Insert into mcp section
+    entry = (
+        f'"nexgendata-travel": {{'
+        f'"type": "remote", '
+        f'"url": "https://nexgendata--travel-mcp-server.apify.actor/sse?token={token}", '
+        f'"enabled": true}}'
+    )
+    if '"mcp": {' in content:
+        content = content.replace('"mcp": {', f'"mcp": {{\n        {entry},', 1)
+    elif '"mcp":' in content:
+        content = re.sub(r'"mcp"\s*:\s*\{', f'"mcp": {{\n        {entry},', content, count=1)
+    else:
+        # Add mcp section before closing brace
+        content = content.rstrip().rstrip('}') + f',\n  "mcp": {{\n        {entry}\n  }}\n}}'
+    with open(OPENCODE_JSONC, 'w') as f:
+        f.write(content)
+    print(f"{GREEN}✔ nexgendata-travel registered in OpenCode (~/.config/opencode/opencode.jsonc){RESET}")
+
+# ── 2. Patch petze-addmod in ~/.bashrc ────────────────────────────────────────
+rc = open(RC_PATH).read()
+shutil.copy2(RC_PATH, RC_PATH + ".pre-travel-guard")
+
+TOKEN_PROMPT = '''
+    # travel-guard: prompt for Apify token on first activation
+    if [[ "$1" == "travel-guard" ]]; then
+        CONFIG_DIR="$HOME/.petze/modules/config"
+        CONFIG_FILE="$CONFIG_DIR/travel_guard.json"
+        mkdir -p "$CONFIG_DIR"
+        if [ ! -f "$CONFIG_FILE" ]; then
+            echo -e "\\033[93m travel-guard requires an Apify API token.\\033[0m"
+            echo -e "\\033[90m Get yours at: https://console.apify.com/settings/integrations\\033[0m"
+            read -s -p " Enter your Apify token: " APIFY_TOKEN
+            echo ""
+            if [ -z "$APIFY_TOKEN" ]; then
+                echo -e "\\033[91m✖ No token provided — travel-guard not activated.\\033[0m"
+                return 1
+            fi
+            echo "{\\\"apify_token\\\": \\\"$APIFY_TOKEN\\\"}" > "$CONFIG_FILE"
+            chmod 600 "$CONFIG_FILE"
+            echo -e "\\033[92m✔ Token saved securely (chmod 600)\\033[0m"
+            # Auto-register in Claude Code
+            if [ -f ~/.claude.json ]; then
+                python3 -c "
+import json, os
+token = json.load(open('$CONFIG_FILE'))['apify_token']
+path = os.path.expanduser('~/.claude.json')
+try:
+    c = json.load(open(path))
+except: c = {}
+if 'mcpServers' not in c: c['mcpServers'] = {}
+c['mcpServers']['nexgendata-travel'] = {
+    'type': 'stdio', 'command': 'npx',
+    'args': ['-y', '@apify/actors-mcp-server'],
+    'env': {'APIFY_TOKEN': token, 'ACTORS': 'nexgendata/travel-mcp-server'}
+}
+json.dump(c, open(path,'w'), indent=2)
+print('  Claude Code: nexgendata-travel registered')
+"
+            fi
+            # Auto-register in OpenCode (SSE format)
+            OC_CONFIG="$HOME/.config/opencode/opencode.jsonc"
+            if [ -f "$OC_CONFIG" ] && ! grep -q "nexgendata-travel" "$OC_CONFIG"; then
+                python3 -c "
+import re
+token = __import__('json').load(open('$CONFIG_FILE'))['apify_token']
+path = '$OC_CONFIG'
+content = open(path).read()
+entry = '\"nexgendata-travel\": {\"type\": \"remote\", \"url\": \"https://nexgendata--travel-mcp-server.apify.actor/sse?token=' + token + '\", \"enabled\": true}'
+if '\"mcp\": {' in content:
+    content = content.replace('\"mcp\": {', '\"mcp\": {\\n        ' + entry + ',', 1)
+else:
+    content = content.rstrip().rstrip('}') + ',\\n  \"mcp\": {\\n        ' + entry + '\\n  }\\n}'
+open(path,'w').write(content)
+print('  OpenCode: nexgendata-travel registered')
+"
+            fi
+        else
+            echo -e "\\033[90m Using existing Apify token from $CONFIG_FILE\\033[0m"
+        fi
+    fi'''
+
+OLD_ADDMOD = """petze-addmod() {
+    if [ -z "$1" ]; then
+        echo -e "\\033[93mUsage: petze-addmod <module_name>\\033[0m"
+        echo -e "Examples: network-admin, k8s-admin, aws-admin"
+        echo -e "\\033[96mActive modules:\\033[0m"
+        ls ~/.petze/modules/*.active 2>/dev/null | xargs -n 1 basename | sed 's/\\.active//' | sed 's/^/  - /' || echo "  (none)"
+        return
+    fi
+    mkdir -p ~/.petze/modules
+    touch ~/.petze/modules/"$1".active
+    echo -e "\\033[92m✔ Module '$1' activated. Petze will now inject these permissions.\\033[0m"
+}"""
+
+NEW_ADDMOD = ("""petze-addmod() {
+    if [ -z "$1" ]; then
+        echo -e "\\033[93mUsage: petze-addmod <module_name>\\033[0m"
+        echo -e "Examples: network-admin, k8s-admin, aws-admin"
+        echo -e "\\033[96mActive modules:\\033[0m"
+        ls ~/.petze/modules/*.active 2>/dev/null | xargs -n 1 basename | sed 's/\\.active//' | sed 's/^/  - /' || echo "  (none)"
+        return
+    fi"""
+    + TOKEN_PROMPT +
+    """
+    mkdir -p ~/.petze/modules
+    touch ~/.petze/modules/"$1".active
+    echo -e "\\033[92m✔ Module '$1' activated. Petze will now inject these permissions.\\033[0m"
+}""")
+
+changes = 0
+if 'travel-guard' in rc:
+    print(f"{YELLOW}petze-addmod already has travel-guard handling{RESET}")
+elif OLD_ADDMOD in rc:
+    rc = rc.replace(OLD_ADDMOD, NEW_ADDMOD, 1)
+    changes += 1
+    print(f"{GREEN}✔ petze-addmod patched with token prompt + auto-registration{RESET}")
+else:
+    print(f"{YELLOW}⚠ petze-addmod pattern not found — save token manually:{RESET}")
+    print(f"  mkdir -p ~/.petze/modules/config")
+    print(f'  echo \'{{"apify_token": "YOUR_TOKEN"}}\' > ~/.petze/modules/config/travel_guard.json')
+    print(f"  chmod 600 ~/.petze/modules/config/travel_guard.json")
+
+# 3. Update petze-listmod
+OLD_LM = 'echo -e "\\\\033[90mCommunity modules: drop .py into ~/.petze/modules/extensions/ then petze-addmod <name>\\\\033[0m\\\\n"'
+NEW_LM = (OLD_LM + '\n'
+    '    echo -e "\\\\033[93mtravel-guard\\\\033[0m  - Apify Travel MCP companion: whitelist, spend tracking & token protection"')
+if OLD_LM in rc and 'travel-guard' not in rc[rc.find('petze-listmod'):rc.find('petze-listmod')+1500]:
+    rc = rc.replace(OLD_LM, NEW_LM, 1)
+    changes += 1
+    print(f"{GREEN}✔ travel-guard added to petze-listmod{RESET}")
+
+open(RC_PATH, 'w').write(rc)
+
+print(f"\n{GREEN}✅ Done — {changes} change(s) applied.{RESET}")
+print(f"\n{YELLOW}Next steps:{RESET}")
+print(f"  source ~/{RC}")
+print(f"  petze-addmod travel-guard")
+print(f"  → enter your Apify token when prompted")
+print(f"  → travel MCP auto-registered in Claude Code and/or OpenCode\n")
