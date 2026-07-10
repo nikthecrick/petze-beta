@@ -69,11 +69,14 @@ Installation takes less than 30 seconds and configures everything automatically 
 Petze requires you to state your **Macro Intent** up front. If the AI tries to do something outside that perimeter, it gets blocked.
 
 **To launch an agent securely:**
+
+If you just type `opencode` or `claude` directly, Petze will intercept the launch and ask you to type your intent, or type `OFF` to bypass, or even `file` to add a briefing file
+
 ```bash
 petze-run "Your prompt goes here. Be specific about your goal."
 petze-claude "Your prompt goes here. Be specific about your goal."
 ```
-*(Note: If you just type `opencode` or `claude` directly, Petze will intercept the launch and ask you to type your intent, or type `OFF` to bypass).*
+
 
 **To manage your environment:**
 ```bash
