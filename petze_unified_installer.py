@@ -1936,7 +1936,6 @@ shell_injection += f'alias petze-dash="python3 {os.path.join(petze_dir, "petze-d
 shell_injection += f'alias petze-stop="{os.path.join(petze_dir, "petze-stop")}"\n'
 shell_injection += f'alias petze-start="{os.path.join(petze_dir, "petze-start")}"\n'
 shell_injection += 'alias petze-status="petze-status"\n'
-shell_injection += f'alias petze-help="petze-help"\n'
 
 # The Help & Whitelist Commands
 shell_injection += r"""
@@ -2226,9 +2225,17 @@ print(content[:1500])
     else
         echo -e "🧠 Formulating intent..."
         _structured=$(_petze_formulate "$raw_intent" "$PWD")
-        if [ -z "$_structured" ]; then
+        # Detect refusals from the intent model — fall back to raw input
+        _is_refusal=false
+        if echo "$_structured" | grep -qiE "^I (can\'t|cannot|won\'t|am unable|don\'t)|^Sorry|^I\'m (sorry|unable|not able)"; then
+            _is_refusal=true
+        fi
+        if [ -z "$_structured" ] || [ "$_is_refusal" = true ]; then
             export PETZE_INTENT="$raw_intent"
-            echo -e "🔓 Intent locked (direct): $raw_intent"
+            if [ "$_is_refusal" = true ]; then
+                echo -e "\n⚠️  Intent model flagged this — using your description directly as the intent."
+            fi
+            echo -e "🔓 Intent locked."
         else
             echo -e "\n  $_structured\n"
             read -p "Confirm? (Enter to accept, or type a correction): " _correction
@@ -2349,9 +2356,17 @@ print(content[:1500])
     else
         echo -e "🧠 Formulating intent..."
         _structured=$(_petze_formulate "$raw_intent" "$PWD")
-        if [ -z "$_structured" ]; then
+        # Detect refusals from the intent model — fall back to raw input
+        _is_refusal=false
+        if echo "$_structured" | grep -qiE "^I (can\'t|cannot|won\'t|am unable|don\'t)|^Sorry|^I\'m (sorry|unable|not able)"; then
+            _is_refusal=true
+        fi
+        if [ -z "$_structured" ] || [ "$_is_refusal" = true ]; then
             export PETZE_INTENT="$raw_intent"
-            echo -e "🔓 Intent locked (direct): $raw_intent"
+            if [ "$_is_refusal" = true ]; then
+                echo -e "\n⚠️  Intent model flagged this — using your description directly as the intent."
+            fi
+            echo -e "🔓 Intent locked."
         else
             echo -e "\n  $_structured\n"
             read -p "Confirm? (Enter to accept, or type a correction): " _correction
