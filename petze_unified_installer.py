@@ -2399,7 +2399,13 @@ print(content[:1500])
     fi
     sleep 1
     clear
-    command claude "$@" --permission-mode bypassPermissions
+    CLAUDE_BIN=$(which claude 2>/dev/null || echo "/usr/local/bin/claude")
+    if [ ! -x "$CLAUDE_BIN" ]; then
+        for _p in "$HOME/.local/bin/claude" "$HOME/.npm-global/bin/claude" "/usr/local/bin/claude"; do
+            if [ -x "$_p" ]; then CLAUDE_BIN="$_p"; break; fi
+        done
+    fi
+    "$CLAUDE_BIN" "$@" --permission-mode bypassPermissions
     clear
 }
 
