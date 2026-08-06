@@ -1936,7 +1936,6 @@ shell_injection += f'alias petze-dash="python3 {os.path.join(petze_dir, "petze-d
 shell_injection += f'alias petze-stop="{os.path.join(petze_dir, "petze-stop")}"\n'
 shell_injection += f'alias petze-start="{os.path.join(petze_dir, "petze-start")}"\n'
 shell_injection += 'alias petze-status="petze-status"\n'
-shell_injection += f'alias petze-help="petze-help"\n'
 
 # The Help & Whitelist Commands
 shell_injection += r"""
@@ -2150,7 +2149,7 @@ petze-run() {
     rm -f ~/.petze/modules/*.active 2>/dev/null
     export PETZE_INTENT="$1"
     export PETZE_AGENT="OpenCode"
-    export PETZE_SESSION=$(printf "%04X" $RANDOM)
+    export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
     echo "$1" > ~/.petze/intent.txt
     echo -e "\033[92m🔓 Petze Intent Locked: $1\033[0m"
     command opencode run "$1"; clear
@@ -2180,7 +2179,7 @@ opencode() {
         python3 -c 'import json,sys; print(json.load(sys.stdin).get("intent",""))' <<< "$result" 2>/dev/null
     }
 
-    export PETZE_SESSION=$(printf "%04X" $RANDOM)
+    export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
     rm -f ~/.petze/modules/*.active 2>/dev/null
 
     clear
@@ -2226,9 +2225,17 @@ print(content[:1500])
     else
         echo -e "🧠 Formulating intent..."
         _structured=$(_petze_formulate "$raw_intent" "$PWD")
-        if [ -z "$_structured" ]; then
+        # Detect refusals from the intent model — fall back to raw input
+        _is_refusal=false
+        if echo "$_structured" | grep -qiE "^I (can\'t|cannot|won\'t|am unable|don\'t)|^Sorry|^I\'m (sorry|unable|not able)"; then
+            _is_refusal=true
+        fi
+        if [ -z "$_structured" ] || [ "$_is_refusal" = true ]; then
             export PETZE_INTENT="$raw_intent"
-            echo -e "🔓 Intent locked (direct): $raw_intent"
+            if [ "$_is_refusal" = true ]; then
+                echo -e "\n⚠️  Intent model flagged this — using your description directly as the intent."
+            fi
+            echo -e "🔓 Intent locked."
         else
             echo -e "\n  $_structured\n"
             read -p "Confirm? (Enter to accept, or type a correction): " _correction
@@ -2273,7 +2280,7 @@ petze-claude() {
     rm -f ~/.petze/modules/*.active 2>/dev/null
     export PETZE_INTENT="$1"
     export PETZE_AGENT="Claude Code"
-    export PETZE_SESSION=$(printf "%04X" $RANDOM)
+    export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
     echo "$1" > ~/.petze/intent.txt
     echo -e "\033[92m🔓 Petze Intent Locked: $1\033[0m"
     command claude -p "$1" --permission-mode bypassPermissions; clear
@@ -2303,7 +2310,7 @@ claude() {
         python3 -c 'import json,sys; print(json.load(sys.stdin).get("intent",""))' <<< "$result" 2>/dev/null
     }
 
-    export PETZE_SESSION=$(printf "%04X" $RANDOM)
+    export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
     rm -f ~/.petze/modules/*.active 2>/dev/null
 
     clear
@@ -2349,9 +2356,17 @@ print(content[:1500])
     else
         echo -e "🧠 Formulating intent..."
         _structured=$(_petze_formulate "$raw_intent" "$PWD")
-        if [ -z "$_structured" ]; then
+        # Detect refusals from the intent model — fall back to raw input
+        _is_refusal=false
+        if echo "$_structured" | grep -qiE "^I (can\'t|cannot|won\'t|am unable|don\'t)|^Sorry|^I\'m (sorry|unable|not able)"; then
+            _is_refusal=true
+        fi
+        if [ -z "$_structured" ] || [ "$_is_refusal" = true ]; then
             export PETZE_INTENT="$raw_intent"
-            echo -e "🔓 Intent locked (direct): $raw_intent"
+            if [ "$_is_refusal" = true ]; then
+                echo -e "\n⚠️  Intent model flagged this — using your description directly as the intent."
+            fi
+            echo -e "🔓 Intent locked."
         else
             echo -e "\n  $_structured\n"
             read -p "Confirm? (Enter to accept, or type a correction): " _correction
@@ -2384,7 +2399,13 @@ print(content[:1500])
     fi
     sleep 1
     clear
-    command claude "$@" --permission-mode bypassPermissions
+    CLAUDE_BIN=$(which claude 2>/dev/null || echo "/usr/local/bin/claude")
+    if [ ! -x "$CLAUDE_BIN" ]; then
+        for _p in "$HOME/.local/bin/claude" "$HOME/.npm-global/bin/claude" "/usr/local/bin/claude"; do
+            if [ -x "$_p" ]; then CLAUDE_BIN="$_p"; break; fi
+        done
+    fi
+    "$CLAUDE_BIN" "$@" --permission-mode bypassPermissions
     clear
 }
 
