@@ -2149,7 +2149,7 @@ petze-run() {
     rm -f ~/.petze/modules/*.active 2>/dev/null
     export PETZE_INTENT="$1"
     export PETZE_AGENT="OpenCode"
-    export PETZE_SESSION=$(printf "%04X" $RANDOM)
+    export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
     echo "$1" > ~/.petze/intent.txt
     echo -e "\033[92m🔓 Petze Intent Locked: $1\033[0m"
     command opencode run "$1"; clear
@@ -2179,7 +2179,7 @@ opencode() {
         python3 -c 'import json,sys; print(json.load(sys.stdin).get("intent",""))' <<< "$result" 2>/dev/null
     }
 
-    export PETZE_SESSION=$(printf "%04X" $RANDOM)
+    export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
     rm -f ~/.petze/modules/*.active 2>/dev/null
 
     clear
@@ -2280,7 +2280,7 @@ petze-claude() {
     rm -f ~/.petze/modules/*.active 2>/dev/null
     export PETZE_INTENT="$1"
     export PETZE_AGENT="Claude Code"
-    export PETZE_SESSION=$(printf "%04X" $RANDOM)
+    export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
     echo "$1" > ~/.petze/intent.txt
     echo -e "\033[92m🔓 Petze Intent Locked: $1\033[0m"
     command claude -p "$1" --permission-mode bypassPermissions; clear
@@ -2310,7 +2310,7 @@ claude() {
         python3 -c 'import json,sys; print(json.load(sys.stdin).get("intent",""))' <<< "$result" 2>/dev/null
     }
 
-    export PETZE_SESSION=$(printf "%04X" $RANDOM)
+    export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
     rm -f ~/.petze/modules/*.active 2>/dev/null
 
     clear
