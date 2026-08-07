@@ -2444,36 +2444,36 @@ print(content[:1500])
         done
     fi
     "$CLAUDE_BIN" "$@" --permission-mode bypassPermissions
-
-    # --- SESSION END SCREEN ---
-    # Find the most recent session ID from the agent
-    _show_session_id() {
-        local _sid=""
-        # Claude Code: look for most recently modified session file
-        if [[ "$PETZE_AGENT" == "Claude Code" ]]; then
-            _sid=$(find ~/.claude/projects -name "*.jsonl" 2>/dev/null \
-                | xargs ls -t 2>/dev/null | head -1 \
-                | sed 's|.*/||;s|\.jsonl||' 2>/dev/null)
-        fi
-        # OpenCode: look in ~/.config/opencode or ~/.opencode
-        if [[ -z "$_sid" ]]; then
-            _sid=$(find ~/.config/opencode ~/.opencode -name "*.json" \
-                -newer ~/.petze/intent.txt 2>/dev/null \
-                | xargs ls -t 2>/dev/null | head -1 \
-                | sed 's|.*/||;s|\.json||' 2>/dev/null)
-        fi
-        echo -e "\n\033[94m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-        echo -e "\033[94m🛡️  Petze Guard — Session ended\033[0m"
-        echo -e "\033[94m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-        echo -e "\033[90m  Petze session:   \033[97m#${PETZE_SESSION}\033[0m"
-        if [ -n "$_sid" ]; then
-            echo -e "\033[90m  Agent session:   \033[97m${_sid}\033[0m"
-            echo -e "\033[90m  Resume with:     \033[92mclaude --resume ${_sid}\033[0m"
-        fi
-        echo -e "\033[90m  Clearing in 10s (or press any key)...\033[0m"
-        read -t 10 -sk1 2>/dev/null || true
-    }
-    _show_session_id
+    sleep 0.4
+    local _OC_SID=$(find ~/.claude/projects -name "*.jsonl" 2>/dev/null -exec ls -t {} + 2>/dev/null | head -1 | sed 's|.*/||;s|\.jsonl||' 2>/dev/null)
+    local _B="\033[34m"
+    local _LB="\033[94m"
+    local _W="\033[97m"
+    local _G="\033[92m"
+    local _DIM="\033[90m"
+    local _R="\033[0m"
+    local _resume_cmd=""
+    [ -n "$_OC_SID" ] && _resume_cmd="claude --resume ${_OC_SID}"
+    clear
+    echo -e "${_B}    ▄▄▄▄▄▄▄▄▄▄    ${_R}  ${_LB}PETZE // SAFETY${_R}"
+    echo -e "${_B}  ▄█▓▓▓▓▓▓▓▓▓▓█▄  ${_R}  ${_DIM}──────────────────────────────${_R}"
+    if [ -n "$_OC_SID" ]; then
+        echo -e "${_B} █▓▓▓▓▓▓▓▓▓▓▓▓▓▓█ ${_R}  ${_DIM}Session${_R}"
+        echo -e "${_B} █▓▓${_W}━━${_B}▓▓▓▓${_W}━━${_B}▓▓▓▓█ ${_R}  ${_W}${_OC_SID}${_R}"
+        echo -e "${_B} █▓▓▓▓▓▓▓▓▓▓▓▓▓▓█ ${_R}"
+        echo -e "${_B} █▓▓▓▓${_W}████${_B}▓▓▓▓▓▓█ ${_R}  ${_DIM}Resume${_R}"
+        echo -e "${_B}  █▓▓▓▓▓▓▓▓▓▓▓▓█  ${_R}  ${_G}${_resume_cmd}${_R}"
+    else
+        echo -e "${_B} █▓▓▓▓▓▓▓▓▓▓▓▓▓▓█ ${_R}"
+        echo -e "${_B} █▓▓${_W}━━${_B}▓▓▓▓${_W}━━${_B}▓▓▓▓█ ${_R}"
+        echo -e "${_B} █▓▓▓▓▓▓▓▓▓▓▓▓▓▓█ ${_R}"
+        echo -e "${_B} █▓▓▓▓${_W}████${_B}▓▓▓▓▓▓█ ${_R}"
+        echo -e "${_B}  █▓▓▓▓▓▓▓▓▓▓▓▓█  ${_R}"
+    fi
+    echo -e "${_B}   ▀█▓╱╲▓▓╱╲▓█▀   ${_R}  ${_DIM}firewall active · petze.xyz${_R}"
+    echo -e "                        ${_DIM}press any key to clear...${_R}"
+    echo
+    read -t 10 -sk1 2>/dev/null || true
     clear
 }
 
