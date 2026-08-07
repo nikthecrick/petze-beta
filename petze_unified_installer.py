@@ -2302,7 +2302,7 @@ print(content[:1500])
         echo -e "${_B}  █▓▓▓▓▓▓▓▓▓▓▓▓█  ${_R}"
     fi
     echo -e "${_B}   ▀█▓╱╲▓▓╱╲▓█▀   ${_R}  ${_DIM}firewall active · petze.xyz${_R}"
-    echo -e "${_B}    ▀▀▀▀▀▀▀▀▀▀    ${_R}  ${_DIM}press any key to clear...${_R}"
+    echo -e "                        ${_DIM}press any key to clear...${_R}"
     echo
     read -t 10 -sk1 2>/dev/null || true
 }
