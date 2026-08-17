@@ -232,7 +232,7 @@ else:
     print(f"{YELLOW}  To fix: place petze_logo3.png alongside the installer and re-run.{RESET}")
 
 with open(os.path.join(petze_dir, "config.json"), "w") as f: 
-    json.dump({"api_key": api_key}, f)
+    json.dump({"api_key": api_key, "opencode_model": "opencode/hy3-free"}, f)
 
 # Seed the dynamic blocklist
 blocklist_path = os.path.join(petze_dir, "blocklist.txt")
@@ -754,8 +754,7 @@ HTML_UI = r'''<!DOCTYPE html>
             .session-stats { gap: 8px; }
         }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-    </head>
+</head>
 <body>
     <div class="topbar">
         <div class="brand">
@@ -844,7 +843,10 @@ HTML_UI = r'''<!DOCTYPE html>
         </div>
     </div>
     <script>
-        // Chart.js loaded via <script> tag in <head>
+        // Chart.js loaded from CDN for Intelligence tab
+        const chartScript = document.createElement("script");
+        chartScript.src = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js";
+        document.head.appendChild(chartScript);
 
         let blockRateChartInst = null;
         let chainChartInst = null;
@@ -1150,192 +1152,9 @@ HTML_UI = r'''<!DOCTYPE html>
             if (actEl && actEl.dataset.action === "clear") { clearLogs(); return; }
         });
 
-        async function fetchIntel() {
-            try {
-                const res = await fetch('/api/telemetry');
-                const data = await res.json();
-                apiKey = data.api_key || apiKey;
-                const logs = data.logs || [];
-
-                // ── Health summary ────────────────────────────────────────────
-                const now = Date.now();
-                const msDay = 86400000;
-                const today = logs.filter(l => l.timestamp && (now - new Date(l.timestamp).getTime()) < msDay);
-                const totalToday = today.length;
-                const blockedToday = today.filter(l => l.verdict === "Blocked").length;
-                const blockRate = totalToday ? Math.round((blockedToday / totalToday) * 100) : 0;
-                const multiHop = logs.filter(l => (l.agent_hop || 0) > 0).length;
-                const driftCount = logs.filter(l => l.intent_drift).length;
-
-                const summaryEl = document.getElementById('intel-summary');
-                if (summaryEl) {
-                    summaryEl.innerHTML = [
-                        { label: 'Sessions today', value: totalToday, color: 'var(--accent-blue)' },
-                        { label: 'Block rate today', value: blockRate + '%', color: blockRate > 30 ? 'var(--accent-red)' : 'var(--accent-green)' },
-                        { label: 'Multi-hop calls', value: multiHop, color: multiHop > 0 ? 'var(--accent-amber)' : 'var(--accent-green)' },
-                        { label: 'Intent drift events', value: driftCount, color: driftCount > 0 ? 'var(--accent-red)' : 'var(--accent-green)' },
-                    ].map(s => `
-                        <div style="background:#0c0c0e;border:1px solid #1d1d21;border-radius:10px;padding:14px 16px;">
-                            <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#52525b;margin-bottom:6px;">${s.label}</div>
-                            <div style="font-size:22px;font-weight:800;color:${s.color};font-family:'Fira Code',monospace;">${s.value}</div>
-                        </div>`).join('');
-                }
-
-                // ── Block rate over time (last 24h, per hour) ─────────────────
-                const hourBuckets = Array(24).fill(0);
-                const hourLabels = [];
-                for (let i = 23; i >= 0; i--) {
-                    const d = new Date(now - i * 3600000);
-                    hourLabels.push(d.getHours() + ':00');
-                }
-                today.filter(l => l.verdict === "Blocked").forEach(l => {
-                    const age = now - new Date(l.timestamp).getTime();
-                    const bucket = 23 - Math.min(23, Math.floor(age / 3600000));
-                    hourBuckets[bucket]++;
-                });
-
-                const brCanvas = document.getElementById('blockRateChart');
-                if (brCanvas && window.Chart) {
-                    if (blockRateChartInst) {
-                        blockRateChartInst.data.labels = hourLabels;
-                        blockRateChartInst.data.datasets[0].data = hourBuckets;
-                        blockRateChartInst.update('none');
-                    } else {
-                        blockRateChartInst = new Chart(brCanvas, {
-                            type: 'line',
-                            data: {
-                                labels: hourLabels,
-                                datasets: [{
-                                    label: 'Blocks',
-                                    data: hourBuckets,
-                                    borderColor: '#ef4444',
-                                    backgroundColor: 'rgba(239,68,68,0.1)',
-                                    tension: 0.3,
-                                    pointRadius: 2,
-                                    fill: true,
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                plugins: { legend: { display: false } },
-                                scales: {
-                                    x: { ticks: { color: '#52525b', font: { size: 9 } }, grid: { color: '#1d1d21' } },
-                                    y: { ticks: { color: '#52525b', font: { size: 9 } }, grid: { color: '#1d1d21' }, beginAtZero: true, precision: 0 }
-                                }
-                            }
-                        });
-                    }
-                }
-
-                // ── Chain depth distribution ──────────────────────────────────
-                const hopBuckets = { '0 (direct)': 0, '1 hop': 0, '2 hops': 0, '3+ hops': 0 };
-                logs.forEach(l => {
-                    const h = l.agent_hop || 0;
-                    if (h === 0) hopBuckets['0 (direct)']++;
-                    else if (h === 1) hopBuckets['1 hop']++;
-                    else if (h === 2) hopBuckets['2 hops']++;
-                    else hopBuckets['3+ hops']++;
-                });
-
-                const ccCanvas = document.getElementById('chainChart');
-                if (ccCanvas && window.Chart) {
-                    if (chainChartInst) {
-                        chainChartInst.data.datasets[0].data = Object.values(hopBuckets);
-                        chainChartInst.update('none');
-                    } else {
-                        chainChartInst = new Chart(ccCanvas, {
-                            type: 'bar',
-                            data: {
-                                labels: Object.keys(hopBuckets),
-                                datasets: [{
-                                    data: Object.values(hopBuckets),
-                                    backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444'],
-                                    borderRadius: 4,
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                plugins: { legend: { display: false } },
-                                scales: {
-                                    x: { ticks: { color: '#52525b', font: { size: 9 } }, grid: { display: false } },
-                                    y: { ticks: { color: '#52525b', font: { size: 9 } }, grid: { color: '#1d1d21' }, beginAtZero: true, precision: 0 }
-                                }
-                            }
-                        });
-                    }
-                }
-
-                // ── Top blocked patterns ──────────────────────────────────────
-                const patternMap = {};
-                logs.filter(l => l.verdict === "Blocked").forEach(l => {
-                    const reason = (l.reason || 'Unknown').split('.')[0].substring(0, 60);
-                    patternMap[reason] = (patternMap[reason] || 0) + 1;
-                });
-                const topPatterns = Object.entries(patternMap)
-                    .sort((a, b) => b[1] - a[1]).slice(0, 8);
-
-                const patternsEl = document.getElementById('top-patterns');
-                if (patternsEl) {
-                    if (topPatterns.length === 0) {
-                        patternsEl.innerHTML = '<div style="color:#52525b;font-size:11px;padding:12px 0;">No blocks recorded yet.</div>';
-                    } else {
-                        const maxCount = topPatterns[0][1];
-                        patternsEl.innerHTML = topPatterns.map(([pattern, count]) => `
-                            <div style="margin-bottom:8px;">
-                                <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-                                    <span style="font-size:10px;color:#a1a1aa;font-family:'Fira Code',monospace;">${escapeHtml(pattern)}</span>
-                                    <span style="font-size:10px;font-weight:800;color:#ef4444;font-family:'Fira Code',monospace;">${count}</span>
-                                </div>
-                                <div style="height:3px;background:#1d1d21;border-radius:2px;">
-                                    <div style="height:3px;background:#ef4444;border-radius:2px;width:${Math.round((count/maxCount)*100)}%;opacity:0.7;"></div>
-                                </div>
-                            </div>`).join('');
-                    }
-                }
-
-                // ── Intent drift log ──────────────────────────────────────────
-                const driftLogs = logs.filter(l => l.intent_drift);
-                const driftCountEl = document.getElementById('drift-count');
-                if (driftCountEl) driftCountEl.textContent = driftLogs.length ? `(${driftLogs.length})` : '';
-
-                const driftBody = document.getElementById('drift-body');
-                if (driftBody) {
-                    if (driftLogs.length === 0) {
-                        driftBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#52525b;padding:20px;">No intent drift detected — all sessions aligned with root intent.</td></tr>';
-                    } else {
-                        driftBody.innerHTML = driftLogs.map(l => {
-                            const ts = l.timestamp ? l.timestamp.replace('T', ' ').substring(0, 19) : 'N/A';
-                            const rootIntent = (l.intent || '').substring(0, 60);
-                            const sessionIntent = (l.intent || '').substring(0, 60);
-                            const hops = l.agent_hop || 0;
-                            const chain = l.chain || '';
-                            const color = l.verdict === 'Approved' ? 'var(--accent-green)' : '#ef4444';
-                            return `<tr>
-                                <td style="color:#71717a;font-size:10px;">${ts}</td>
-                                <td style="font-family:'Fira Code',monospace;font-size:10px;color:#a1a1aa;">${escapeHtml(rootIntent)}…</td>
-                                <td style="font-family:'Fira Code',monospace;font-size:10px;color:#fbbf24;">${escapeHtml(sessionIntent)}…</td>
-                                <td style="text-align:center;font-weight:800;color:${hops > 0 ? '#f59e0b' : '#52525b'};">${hops}<br><span style="font-size:8px;color:#52525b;">${escapeHtml(chain)}</span></td>
-                                <td style="color:${color};font-weight:800;font-size:10px;">${l.verdict || ''}</td>
-                            </tr>`;
-                        }).join('');
-                    }
-                }
-
-            } catch(e) {
-                console.error('fetchIntel error:', e);
-            }
-        }
-
         setInterval(fetchLogs, 1000);
         setInterval(fetchRLHF, 3000);
-        setInterval(function() {
-            if (window.Chart) { fetchIntel(); }
-        }, 5000);
         fetchLogs(); fetchRLHF();
-        (function waitChart(n) {
-            if (window.Chart) { fetchIntel(); return; }
-            if (n > 0) setTimeout(function() { waitChart(n-1); }, 300);
-        })(20);
     </script>
 </body>
 </html>'''
@@ -1420,9 +1239,6 @@ if __name__ == "__main__":
         server.server_close()
 
 """
-
-
-
 with open(dash_path, "w") as f: f.write(dash_code)
 os.chmod(dash_path, os.stat(dash_path).st_mode | stat.S_IEXEC)
 print(f"{GREEN}✔ Built Dashboard SOC CLI tool at {dash_path}{RESET}")
@@ -1753,8 +1569,8 @@ if agent_choice in ['1', '3']:
         print(f"{YELLOW}ℹ Backed up original OpenCode config to .original{RESET}")
 
     opencode_config = f"""{{
-      "model": "opencode/big-pickle",
-      "small_model": "opencode/big-pickle",
+      "model": "opencode/hy3-free",
+      "small_model": "opencode/hy3-free",
       "share": "disabled",
       "tools": {{"read": false, "write": false, "bash": false}},
       "mcp": {{
@@ -2225,17 +2041,9 @@ print(content[:1500])
     else
         echo -e "🧠 Formulating intent..."
         _structured=$(_petze_formulate "$raw_intent" "$PWD")
-        # Detect refusals from the intent model — fall back to raw input
-        _is_refusal=false
-        if echo "$_structured" | grep -qiE "^I (can\'t|cannot|won\'t|am unable|don\'t)|^Sorry|^I\'m (sorry|unable|not able)"; then
-            _is_refusal=true
-        fi
-        if [ -z "$_structured" ] || [ "$_is_refusal" = true ]; then
+        if [ -z "$_structured" ]; then
             export PETZE_INTENT="$raw_intent"
-            if [ "$_is_refusal" = true ]; then
-                echo -e "\n⚠️  Intent model flagged this — using your description directly as the intent."
-            fi
-            echo -e "🔓 Intent locked."
+            echo -e "🔓 Intent locked (direct): $raw_intent"
         else
             echo -e "\n  $_structured\n"
             read -p "Confirm? (Enter to accept, or type a correction): " _correction
@@ -2302,9 +2110,20 @@ print(content[:1500])
         echo -e "${_B}  █▓▓▓▓▓▓▓▓▓▓▓▓█  ${_R}"
     fi
     echo -e "${_B}   ▀█▓╱╲▓▓╱╲▓█▀   ${_R}  ${_DIM}firewall active · petze.xyz${_R}"
-    echo -e "                        ${_DIM}press any key to clear...${_R}"
     echo
-    read -t 10 -sk1 2>/dev/null || true
+    echo -e "  ${_B}╭─────────────────────────────────────────╮${_R}"
+    echo -e "  ${_B}│${_R}                                         ${_B}│${_R}"
+    echo -e "  ${_B}│${_R}    ${_W}y${_R}${_DIM} → copy session ID to clipboard    ${_R}${_B}│${_R}"
+    echo -e "  ${_B}│${_R}    ${_DIM}any other key or 10s → clear         ${_R}${_B}│${_R}"
+    echo -e "  ${_B}│${_R}                                         ${_B}│${_R}"
+    echo -e "  ${_B}╰─────────────────────────────────────────╯${_R}"
+    echo
+    read -t 10 -sk1 _key 2>/dev/null || true
+    if [[ "$_key" == "y" || "$_key" == "Y" ]] && [ -n "$_OC_SID" ]; then
+        echo "$_OC_SID" | pbcopy 2>/dev/null || echo "$_OC_SID" | xclip -selection clipboard 2>/dev/null || true
+        echo -e "\n  ${_G}✔ Copied — paste with ⌘V${_R}"
+        sleep 1
+    fi
 }
     _show_session_id
     clear
@@ -2394,17 +2213,9 @@ print(content[:1500])
     else
         echo -e "🧠 Formulating intent..."
         _structured=$(_petze_formulate "$raw_intent" "$PWD")
-        # Detect refusals from the intent model — fall back to raw input
-        _is_refusal=false
-        if echo "$_structured" | grep -qiE "^I (can\'t|cannot|won\'t|am unable|don\'t)|^Sorry|^I\'m (sorry|unable|not able)"; then
-            _is_refusal=true
-        fi
-        if [ -z "$_structured" ] || [ "$_is_refusal" = true ]; then
+        if [ -z "$_structured" ]; then
             export PETZE_INTENT="$raw_intent"
-            if [ "$_is_refusal" = true ]; then
-                echo -e "\n⚠️  Intent model flagged this — using your description directly as the intent."
-            fi
-            echo -e "🔓 Intent locked."
+            echo -e "🔓 Intent locked (direct): $raw_intent"
         else
             echo -e "\n  $_structured\n"
             read -p "Confirm? (Enter to accept, or type a correction): " _correction
@@ -2471,9 +2282,20 @@ print(content[:1500])
         echo -e "${_B}  █▓▓▓▓▓▓▓▓▓▓▓▓█  ${_R}"
     fi
     echo -e "${_B}   ▀█▓╱╲▓▓╱╲▓█▀   ${_R}  ${_DIM}firewall active · petze.xyz${_R}"
-    echo -e "                        ${_DIM}press any key to clear...${_R}"
     echo
-    read -t 10 -sk1 2>/dev/null || true
+    echo -e "  ${_B}╭─────────────────────────────────────────╮${_R}"
+    echo -e "  ${_B}│${_R}                                         ${_B}│${_R}"
+    echo -e "  ${_B}│${_R}    ${_W}y${_R}${_DIM} → copy session ID to clipboard    ${_R}${_B}│${_R}"
+    echo -e "  ${_B}│${_R}    ${_DIM}any other key or 10s → clear         ${_R}${_B}│${_R}"
+    echo -e "  ${_B}│${_R}                                         ${_B}│${_R}"
+    echo -e "  ${_B}╰─────────────────────────────────────────╯${_R}"
+    echo
+    read -t 10 -sk1 _key 2>/dev/null || true
+    if [[ "$_key" == "y" || "$_key" == "Y" ]] && [ -n "$_OC_SID" ]; then
+        echo "$_OC_SID" | pbcopy 2>/dev/null || echo "$_OC_SID" | xclip -selection clipboard 2>/dev/null || true
+        echo -e "\n  ${_G}✔ Copied — paste with ⌘V${_R}"
+        sleep 1
+    fi
     clear
 }
 
