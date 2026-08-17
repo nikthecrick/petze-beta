@@ -6,11 +6,19 @@ import subprocess
 import shutil
 import secrets
 
+B, G, Y, R, D, W, X = '\033[34m', '\033[92m', '\033[93m', '\033[91m', '\033[90m', '\033[97m', '\033[0m'
 BLUE, GREEN, YELLOW, RED, RESET = '\033[94m', '\033[92m', '\033[93m', '\033[91m', '\033[0m'
 
-print(f"\n{BLUE}======================================={RESET}")
-print(f"{BLUE}(‾_‾)  PETZE GUARD: UNIVERSAL INSTALLER{RESET}")
-print(f"{BLUE}======================================={RESET}\n")
+print(f"""
+{B}    ▄▄▄▄▄▄▄▄▄▄    {X}  {W}PETZE // SAFETY{X}
+{B}  ▄█▓▓▓▓▓▓▓▓▓▓█▄  {X}  {D}──────────────────────────────{X}
+{B} █▓▓▓▓▓▓▓▓▓▓▓▓▓▓█ {X}  {D}Zero-Trust AI Firewall{X}
+{B} █▓▓{W}━━{B}▓▓▓▓{W}━━{B}▓▓▓▓█ {X}  {D}Universal Installer{X}
+{B} █▓▓▓▓▓▓▓▓▓▓▓▓▓▓█ {X}
+{B} █▓▓▓▓{W}████{B}▓▓▓▓▓▓█ {X}  {D}petze.xyz{X}
+{B}  █▓▓▓▓▓▓▓▓▓▓▓▓█  {X}
+{B}   ▀█▓╱╲▓▓╱╲▓█▀   {X}
+""")
 
 # --- 1. USER INPUTS ---
 api_key = input(f"{YELLOW}Enter your Petze API Key:{RESET} ").strip()
