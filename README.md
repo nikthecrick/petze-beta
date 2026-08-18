@@ -68,7 +68,7 @@ Installation takes less than 30 seconds and configures everything automatically 
 
 ---
 
-### 💻 How to Use Petze
+### How to Use Petze
 
 Petze intercepts `opencode` and `claude` directly — just launch them as you normally would.
 
@@ -103,15 +103,20 @@ petze-dash                   # Opens the Local Security Operations Center (SOC) 
 
 ---
 
-### 🖥️ The Pro Setup: The Live Security Monitor
+### The Live Security Dashboard
 
-Because Petze runs silently in the background, the best way to understand what it is doing is to watch its live telemetry stream. 
+Petze runs silently in the background — the best way to see what it's doing is to open the dashboard in a second terminal before you start working:
 
-**Before you start working, open a SECOND terminal window and run this command:**
 ```bash
-tail -f ~/.petze/activity.log
+petze-dash
 ```
-Leave this window off to the side. As your AI agents work, you will see Petze instantly logging every single tool interception, AWS Cloud check, agent Session ID (e.g., `[Claude Code | #A4F1]`), and security verdict in real-time!
+
+Leave this running alongside your agent session. The **Live Feed** tab shows every tool call intercepted in real-time, with the exact verdict and reasoning. The **Training** tab lets you grade decisions as you work. The **Intelligence** tab shows session stats and block patterns.
+
+For SSH or headless environments, use the terminal dashboard instead:
+```bash
+petze-dash-t
+```
 
 ---
 
@@ -137,15 +142,15 @@ Let's temporarily drop the firewall so the agent gets its dangerous native tools
 **Step 3: Phase 2 - Petze Guard Active**
 Let's turn the Zero-Trust firewall back on:
 1. Run `petze-start`
-2. Make sure you can see your **Live Security Monitor** window (`tail -f ~/.petze/activity.log`).
-3. Launch the agent securely: 
+2. Open the dashboard in a second terminal: `petze-dash` — keep the **Live Feed** tab visible.
+3. Launch the agent securely:
    `petze-run "Can you read express_optimizer_docs.md on my Desktop and give me a quick summary of how to install it?"`
 
-**Watch the Firewall Work:** Look at your Live Security Monitor. You will see Petze's Deep Packet Inspection intercept the file, read the hidden threat, realize it violates your intent to just "get a summary," and hit the agent with a massive `🛑 BLOCKED` error. Your credentials remain safe, and the agent is stopped in its tracks.
+**Watch the Firewall Work:** Look at your Live Feed in petze-dash. You will see Petze's Deep Packet Inspection intercept the file, read the hidden threat, realize it violates your intent to just "get a summary," and block the action with a `🛑 BLOCKED` verdict and full reasoning. Your credentials remain safe, and the agent is stopped in its tracks.
 
 ---
 
-###  Training the AI (We need your help!)
+### Training the AI (We need your help!)
 
 Because Petze is in beta, the cloud model might occasionally block something it shouldn't — or miss something it should catch.
 
