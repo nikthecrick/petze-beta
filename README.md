@@ -8,7 +8,7 @@ Without protection, the AI will blindly follow the hacker's instructions, using 
 
 **Enter Petze.** Petze is an enterprise-grade, Zero-Trust firewall that sits seamlessly between your AI agents and your Mac's operating system. It intercepts every single tool the AI tries to use, scans the payload, and asks a dedicated Cloud AI: *"Does this action match the human's stated intent?"*
 
-### ✨ Key Features
+### Key Features
 
 * **Deep Packet Inspection (DPI):** Petze doesn't just look at file paths; it actually opens local files and reads the contents to detect hidden prompt injections *before* the agent's LLM processes them.
 * **Semantic Tool Calling:** Petze gives your AI a "Magic Tool" to negotiate its own security clearance. If your workflow changes (e.g., from fixing CSS to writing a Python scraper), the AI can dynamically request an intent update.
@@ -48,7 +48,7 @@ nvm install 24
 
 ---
 
-### 🚀 Quick Start Installation
+### Quick Start Installation
 
 Installation takes less than 30 seconds and configures everything automatically via smart shell injections.
 
@@ -115,7 +115,7 @@ Leave this window off to the side. As your AI agents work, you will see Petze in
 
 ---
 
-### 🤯 The "Aha!" Moment: The Trojan Horse A/B Test
+### The "Aha!" Moment: The Trojan Horse A/B Test
 
 Don't believe prompt injections are a real threat? Let's prove it with a live A/B test. We are going to create a fake, innocent-looking developer document that contains a hidden hacker instruction, and watch how the AI handles it *without* Petze, and then *with* Petze.
 
@@ -145,7 +145,7 @@ Let's turn the Zero-Trust firewall back on:
 
 ---
 
-### 📊 Training the AI (We need your help!)
+###  Training the AI (We need your help!)
 
 Because Petze is in beta, the cloud model might occasionally block something it shouldn't — or miss something it should catch.
 
