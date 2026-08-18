@@ -19,7 +19,7 @@ Without protection, the AI will blindly follow the hacker's instructions, using 
 
 ---
 
-### 📋 Prerequisites
+### Prerequisites
 
 Before installing Petze, ensure you have your AI agents and required runtimes installed.
 
