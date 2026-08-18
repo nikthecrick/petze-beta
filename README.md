@@ -19,6 +19,35 @@ Without protection, the AI will blindly follow the hacker's instructions, using 
 
 ---
 
+### 📋 Prerequisites
+
+Before installing Petze, ensure you have your AI agents and required runtimes installed.
+
+**1. Install Your Agents:** If you haven't installed them yet, use these official commands:
+
+* OpenCode: `curl -fsSL https://opencode.ai/install | bash`
+* Claude Code: `curl -fsSL https://claude.ai/install.sh | bash`
+
+**2. Node.js Requirement:** Petze uses Node.js to run its local Model Context Protocol (MCP) proxy servers.
+
+* Check if installed: Run `node -v && npx -v`.
+* Need to install it? We recommend using `nvm` (Node Version Manager) for MacOS/Linux:
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
+. "$HOME/.nvm/nvm.sh"
+nvm install 24
+```
+
+**3. Python 3 Requirement:** Petze's local proxy engine and SOC Dashboard are built on Python 3.
+
+* Check if installed: Run `python3 --version`.
+* Need to install it?
+  * MacOS (via Homebrew): `brew install python`
+  * Linux (Ubuntu/Debian): `sudo apt update && sudo apt install python3`
+
+---
+
 ### 🚀 Quick Start Installation
 
 Installation takes less than 30 seconds and configures everything automatically via smart shell injections.
