@@ -25,7 +25,82 @@ B, G, Y, R, D, W, X = ('\033[34m', '\033[92m', '\033[93m',
 
 DRY = "--dry-run" in sys.argv
 MARKER = "# --- PETZE GUARD GLOBAL COMMANDS ---"
+END_MARKER = "# --- END PETZE GUARD ---"
 CANARY_SIGNATURES = ["AKIA_PETZE_", "PETZE_BYPASS_", "aws_admin_key |"]
+
+
+def strip_petze_block(content):
+    """
+    Remove Petze's shell block while preserving every non-Petze line, including
+    anything appended after the block by other installers (nvm, pyenv, rbenv...).
+
+    Newer installs carry an explicit END marker. Older ones do not, so the block
+    is parsed structurally: shell functions are matched by brace depth and only
+    removed if their body references Petze. Agent interceptors (`opencode()`,
+    `claude()`) have no "petze" in the name but do in the body, so they are
+    caught correctly, while a user's own function of any name survives.
+    """
+    if MARKER not in content:
+        return content, 0, []
+
+    head, _, tail = content.partition(MARKER)
+
+    # Fast path: explicit end marker present.
+    if END_MARKER in tail:
+        _, _, after = tail.partition(END_MARKER)
+        preserved = [l for l in after.split("\n") if l.strip()]
+        rebuilt = head.rstrip()
+        if preserved:
+            rebuilt += "\n\n" + "\n".join(preserved)
+        return rebuilt + "\n", tail.count("\n"), preserved
+
+    # Structural path for pre-marker installs.
+    import re
+    lines = tail.split("\n")
+    kept, preserved, removed = [], [], 0
+    i = 0
+    fn_re = re.compile(r'^(?:function\s+)?([A-Za-z_][A-Za-z0-9_-]*)\s*\(\)\s*\{')
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        if fn_re.match(stripped):
+            block, depth, j = [], 0, i
+            while j < len(lines):
+                cur = lines[j]
+                block.append(cur)
+                code = cur.split("#", 1)[0] if not cur.lstrip().startswith("#") else ""
+                depth += code.count("{") - code.count("}")
+                j += 1
+                if depth <= 0 and len(block) > 0:
+                    break
+            body = "\n".join(block).lower()
+            if "petze" in body:
+                removed += len(block)
+            else:
+                kept.extend(block)
+                preserved.extend(b for b in block if b.strip())
+            i = j
+            continue
+
+        if stripped and "petze" in stripped.lower():
+            removed += 1
+            i += 1
+            continue
+
+        if stripped:
+            kept.append(line)
+            preserved.append(line)
+        else:
+            kept.append(line)
+        i += 1
+
+    tail_text = "\n".join(kept).strip()
+    rebuilt = head.rstrip()
+    if tail_text:
+        rebuilt += "\n\n" + tail_text
+    return rebuilt + "\n", removed, preserved
 
 removed = []
 skipped = []
@@ -203,44 +278,42 @@ for rc_file in [".zshrc", ".bashrc"]:
         note(f"~/{rc_file} has no Petze block")
         continue
 
-    head, _, tail = content.partition(MARKER)
-
-    # The installer appends its block at the end of the file. Anything in the
-    # tail that has no Petze reference was likely added by the user afterwards,
-    # so surface it rather than silently discarding it.
-    orphans = [
-        ln for ln in tail.split("\n")
-        if ln.strip()
-        and "petze" not in ln.lower()
-        and not ln.lstrip().startswith(("#", "}", "esac", "fi", ";;", "echo", "return"))
-        and not ln.startswith((" ", "\t"))
-    ]
-    if orphans:
-        warn(f"~/{rc_file}: {len(orphans)} non-Petze line(s) sat after the Petze "
-             f"block and were removed — recover them from the backup")
-        for o in orphans[:5]:
-            print(f"      {D}{o.strip()[:70]}{X}")
+    new_content, removed_lines, preserved = strip_petze_block(content)
 
     if not DRY:
         bk = backup(rc_path)
         with open(rc_path, "w") as f:
-            f.write(head.rstrip() + "\n")
-        act(f"cleaned ~/{rc_file} (backup: {os.path.basename(bk)})")
+            f.write(new_content)
+        act(f"cleaned ~/{rc_file} — {removed_lines} Petze line(s) removed "
+            f"(backup: {os.path.basename(bk)})")
     else:
-        act(f"cleaned ~/{rc_file}")
+        act(f"clean ~/{rc_file} — {removed_lines} Petze line(s)")
 
-    # Also strip any stray circular aliases from older installer versions.
+    if preserved:
+        print(f"  {G}·{X} {D}preserved {len(preserved)} non-Petze line(s), "
+              f"including:{X}")
+        for p in preserved[:4]:
+            print(f"      {D}{p.strip()[:68]}{X}")
+
+    # Strip any stray circular aliases from older installer versions.
     if not DRY:
         with open(rc_path) as f:
             lines = f.readlines()
-        clean = [l for l in lines
-                 if not (l.strip().startswith("alias petze-")
-                         and l.strip().split("=")[0].replace("alias ", "")
-                         in l.strip().split("=", 1)[1].strip('"\n '))]
-        if len(clean) != len(lines):
+        clean = []
+        dropped = 0
+        for l in lines:
+            s = l.strip()
+            if s.startswith("alias petze-") and "=" in s:
+                name = s.split("=", 1)[0].replace("alias ", "").strip()
+                val = s.split("=", 1)[1].strip().strip('"\'')
+                if name == val:
+                    dropped += 1
+                    continue
+            clean.append(l)
+        if dropped:
             with open(rc_path, "w") as f:
                 f.writelines(clean)
-            act(f"removed {len(lines) - len(clean)} circular alias line(s) from ~/{rc_file}")
+            act(f"removed {dropped} circular alias line(s) from ~/{rc_file}")
 
 for prof_file in [".zprofile", ".bash_profile"]:
     prof_path = os.path.expanduser(f"~/{prof_file}")
