@@ -6,6 +6,8 @@ import subprocess
 import shutil
 import secrets
 
+os.system('clear')
+
 B, G, Y, R, D, W, X = '\033[34m', '\033[92m', '\033[93m', '\033[91m', '\033[90m', '\033[97m', '\033[0m'
 BLUE, GREEN, YELLOW, RED, RESET = '\033[94m', '\033[92m', '\033[93m', '\033[91m', '\033[0m'
 
@@ -1943,7 +1945,6 @@ shell_injection += f'alias petze-dash-t="python3 {os.path.join(petze_dir, "petze
 shell_injection += f'alias petze-dash="python3 {os.path.join(petze_dir, "petze-dash")}"\n'
 shell_injection += f'alias petze-stop="{os.path.join(petze_dir, "petze-stop")}"\n'
 shell_injection += f'alias petze-start="{os.path.join(petze_dir, "petze-start")}"\n'
-shell_injection += 'alias petze-status="petze-status"\n'
 
 # The Help & Whitelist Commands
 shell_injection += r"""
