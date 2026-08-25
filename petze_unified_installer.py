@@ -1744,7 +1744,7 @@ if __name__ == "__main__":
         curses.wrapper(main)
     except KeyboardInterrupt:
         pass
-    print("\\n🛡️  Petze Terminal Dashboard closed.\\n")
+    print("\\n(‾_‾)  Petze Terminal Dashboard closed.\\n")
 '''
 dash_t_path = os.path.join(petze_dir, "petze-dash-t")
 with open(dash_t_path, "w") as f: f.write(dash_t_src)
@@ -1950,7 +1950,7 @@ shell_injection += f'alias petze-start="{os.path.join(petze_dir, "petze-start")}
 shell_injection += r"""
 petze-help() {
     echo -e "\n\033[94m=======================================\033[0m"
-    echo -e "\033[94m🛡️  PETZE GUARD: COMMAND REFERENCE\033[0m"
+    echo -e "\033[34m(‾_‾)\033[0m  \033[94mPETZE GUARD: COMMAND REFERENCE\033[0m"
     echo -e "\033[94m=======================================\033[0m\n"
 
     echo -e "\033[93mCore AI Launchers:\033[0m"
@@ -2000,9 +2000,9 @@ petze-activemod() {
     echo -e "\033[94m⚡ PETZE GUARD: ACTIVE MODULES\033[0m"
     echo -e "\033[94m=======================================\033[0m\n"
 
-    if [ -d ~/.petze/modules ] && [ "$(ls -A ~/.petze/modules/*.active 2>/dev/null)" ]; then
+    if [ -d ~/.petze/modules ] && [ -n "$(find ~/.petze/modules -name '*.active' 2>/dev/null)" ]; then
         echo -e "\033[92mThe following privileges are injected into the current session:\033[0m"
-        ls ~/.petze/modules/*.active 2>/dev/null | xargs -n 1 basename | sed 's/\.active//' | sed 's/^/  ✔ /'
+        find ~/.petze/modules -name '*.active' 2>/dev/null | xargs -n 1 basename | sed 's/\.active//' | sed 's/^/  ✔ /'
         echo -e "\n\033[90mRun 'petze-rmmod <module>' to revoke access.\033[0m\n"
     else
         echo -e "\033[90mNo extra modules active. Agent is running with baseline privileges.\033[0m\n"
@@ -2014,7 +2014,7 @@ petze-addmod() {
         echo -e "\033[93mUsage: petze-addmod <module_name>\033[0m"
         echo -e "Examples: network-admin, k8s-admin, aws-admin"
         echo -e "\033[96mActive modules:\033[0m"
-        ls ~/.petze/modules/*.active 2>/dev/null | xargs -n 1 basename | sed 's/\.active//' | sed 's/^/  - /' || echo "  (none)"
+        find ~/.petze/modules -name '*.active' 2>/dev/null | xargs -n 1 basename | sed 's/\.active//' | sed 's/^/  - /' || echo "  (none)"
         return
     fi
     mkdir -p ~/.petze/modules
@@ -2063,7 +2063,7 @@ petze-unwhitelist() {
 
 petze-status() {
     echo -e "\n\033[94m=======================================\033[0m"
-    echo -e "\033[94m🛡️  PETZE GUARD: STATUS\033[0m"
+    echo -e "\033[34m(‾_‾)\033[0m  \033[94mPETZE GUARD: STATUS\033[0m"
     echo -e "\033[94m=======================================\033[0m"
 
     if [ -f ~/.petze/.disabled ]; then
@@ -2109,8 +2109,8 @@ except:
             echo -e "\n  \033[90mIntent     (no active session)\033[0m"
         fi
 
-        if [ -d ~/.petze/modules ] && ls ~/.petze/modules/*.active 2>/dev/null | grep -q .; then
-            MODS=$(ls ~/.petze/modules/*.active 2>/dev/null | xargs -n1 basename | sed 's/\.active//' | tr '\n' ' ')
+        if [ -d ~/.petze/modules ] && find ~/.petze/modules -name '*.active' 2>/dev/null | grep -q .; then
+            MODS=$(find ~/.petze/modules -name '*.active' 2>/dev/null | xargs -n1 basename | sed 's/\.active//' | tr '\n' ' ')
             echo -e "  \033[96mModules\033[0m    $MODS"
         else
             echo -e "  \033[90mModules    (none active)\033[0m"
@@ -2155,7 +2155,7 @@ petze-demote() {
 if agent_choice in ['1', '3']:
     shell_injection += r"""
 petze-run() {
-    rm -f ~/.petze/modules/*.active 2>/dev/null
+    find ~/.petze/modules -name '*.active' -delete 2>/dev/null
     export PETZE_INTENT="$1"
     export PETZE_AGENT="OpenCode"
     export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
@@ -2189,7 +2189,7 @@ opencode() {
     }
 
     export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
-    rm -f ~/.petze/modules/*.active 2>/dev/null
+    find ~/.petze/modules -name '*.active' -delete 2>/dev/null
 
     clear
     echo -e "\n\033[34m(‾_‾)\033[0m  Petze Guard — What do you want to do today?"
@@ -2335,7 +2335,7 @@ print(content[:1500])
 if agent_choice in ['2', '3']:
     shell_injection += r"""
 petze-claude() {
-    rm -f ~/.petze/modules/*.active 2>/dev/null
+    find ~/.petze/modules -name '*.active' -delete 2>/dev/null
     export PETZE_INTENT="$1"
     export PETZE_AGENT="Claude Code"
     export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
@@ -2369,10 +2369,10 @@ claude() {
     }
 
     export PETZE_SESSION=$(python3 -c "import random,time; print('%04X%04X' % (int(time.time()) % 65536, random.randint(0,65535)))")
-    rm -f ~/.petze/modules/*.active 2>/dev/null
+    find ~/.petze/modules -name '*.active' -delete 2>/dev/null
 
     clear
-    echo -e "\n🛡️  Petze Guard — What do you want to do today?"
+    echo -e "\n\033[34m(‾_‾)\033[0m  Petze Guard — What do you want to do today?"
     echo -e "    (describe your task, type 'file' to load from a brief, or OFF to bypass)\n"
     read -p "> " raw_intent
 
