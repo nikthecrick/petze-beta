@@ -2521,10 +2521,12 @@ if "# --- PETZE GUARD GLOBAL COMMANDS ---" in rc_content:
     with open(rc_path, "w") as f:
         f.write(clean_content.rstrip() + "\n")
         f.write(shell_injection)
+        f.write("\n# --- END PETZE GUARD ---\n")
     print(f"{GREEN}✔ Upgraded terminal interceptors and functions in ~/{rc_file}{RESET}")
 else:
     with open(rc_path, "a") as f:
         f.write(shell_injection)
+        f.write("\n# --- END PETZE GUARD ---\n")
     print(f"{GREEN}✔ Injected terminal interceptors and functions into ~/{rc_file}{RESET}")
 
 # 7c. Link to Profile (Global Fix)
