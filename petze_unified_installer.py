@@ -2387,7 +2387,7 @@ claude() {
     find ~/.petze/modules -name '*.active' -delete 2>/dev/null
 
     clear
-    echo -e "\n🛡️  Petze Guard — What do you want to do today?"
+    echo -e "\n\033[34m(‾_‾)\033[0m  Petze Guard — What do you want to do today?"
     echo -e "    (describe your task, type 'file' to load from a brief, or OFF to bypass)\n"
     echo -n "> "; read raw_intent
 
