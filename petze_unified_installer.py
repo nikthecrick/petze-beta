@@ -880,7 +880,7 @@ HTML_UI = r'''<!DOCTYPE html>
         }
 
         function getLayer(log) {
-            if (!log || log.verdict === "Approved") return { label: "approved", cls: "layer-approved" };
+            if (!log) return { label: "cloud", cls: "layer-cloud" };
             const r = (log.reason || "").toLowerCase();
             if (r.includes("package") || r.includes("supply chain") || r.includes("typosquat"))
                 return { label: "pkg-guard", cls: "layer-package" };
@@ -975,19 +975,7 @@ HTML_UI = r'''<!DOCTYPE html>
             }
 
             // Layer breakdown
-            const layerCounts = {};
-            logs.filter(l => l.verdict === 'Blocked').forEach(l => {
-                const lyr = getLayer(l);
-                layerCounts[lyr.label] = (layerCounts[lyr.label] || 0) + 1;
-            });
-            const layerBadges = Object.entries(layerCounts).filter(([,v]) => v > 0)
-                .map(([k,v]) => {
-                    const cls = {cloud:'layer-cloud',deterministic:'layer-deterministic',dpi:'layer-dpi','pkg-guard':'layer-package'}[k] || 'layer-cloud';
-                    return '<span class="layer-badge ' + cls + '">' + v + ' ' + k + '</span>';
-                }).join(' ');
-            const layerLine = layerBadges ? '<div style="margin-bottom:8px">' + layerBadges + '</div>' : '';
-
-            let statsHtml = layerLine;
+            let statsHtml = "";
             if (s.approved) statsHtml += '<span class="stat-approved">' + s.approved + " ok</span>";
             if (s.blocked) statsHtml += '<span class="stat-blocked">' + s.blocked + " blocked</span>";
             if (s.intentChanges) statsHtml += '<span class="stat-intent">' + s.intentChanges + " shift</span>";
@@ -1222,6 +1210,23 @@ HTML_UI = r'''<!DOCTYPE html>
                             <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#52525b;margin-bottom:6px;">${s.label}</div>
                             <div style="font-size:22px;font-weight:800;color:${s.color};font-family:'Fira Code',monospace;">${s.value}</div>
                         </div>`).join('');
+                }
+
+                // ── Layer breakdown (Blocks by layer) ──────────────────────────
+                const _lyrCounts = {};
+                logs.filter(l => l.verdict === 'Blocked').forEach(l => {
+                    const _lyr = getLayer(l);
+                    _lyrCounts[_lyr.label] = (_lyrCounts[_lyr.label] || 0) + 1;
+                });
+                const _lyrEl = document.getElementById('intel-layers');
+                if (_lyrEl) {
+                    const _lyrBadges = Object.entries(_lyrCounts).filter(([,v]) => v > 0)
+                        .map(([k,v]) => {
+                            const _cls = {cloud:'layer-cloud',deterministic:'layer-deterministic',
+                                dpi:'layer-dpi','pkg-guard':'layer-package'}[k] || 'layer-cloud';
+                            return '<span class="layer-badge ' + _cls + '" style="font-size:11px;padding:3px 10px;">' + v + ' ' + k + '</span>';
+                        }).join(' ');
+                    _lyrEl.innerHTML = _lyrBadges ? '<div style="margin:8px 0 16px;">' + _lyrBadges + '</div>' : '';
                 }
 
                 // ── Block rate over time (last 24h, per hour) ─────────────────
