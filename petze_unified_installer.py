@@ -1801,7 +1801,7 @@ if __name__ == "__main__":
         curses.wrapper(main)
     except KeyboardInterrupt:
         pass
-    print("\\n🛡️  Petze Terminal Dashboard closed.\\n")
+    print("\\n(‾_‾)  Petze Terminal Dashboard closed.\\n")
 '''
 dash_t_path = os.path.join(petze_dir, "petze-dash-t")
 with open(dash_t_path, "w") as f: f.write(dash_t_src)
@@ -2654,7 +2654,7 @@ if f"source ~/{rc_file}" not in profile_content:
 # --- 8. LOG FILE ---
 open(os.path.join(petze_dir, "activity.log"), "a").close()
 
-print(f"\n{GREEN}🚀 INSTALLATION COMPLETE!{RESET}")
+print(f"\n{GREEN}(‾_‾) INSTALLATION COMPLETE!{RESET}")
 print(f"{YELLOW}Important: Run this command right now to activate your new shell functions:{RESET}")
 print(f"source ~/{rc_file}\n")
 print(f"{YELLOW}For help type petze-help{RESET}")
