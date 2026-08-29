@@ -2046,7 +2046,7 @@ petze-help() {
 
 petze-listmod() {
     echo -e "\n\033[94m=======================================\033[0m"
-    echo -e "\033[94m📦 PETZE GUARD: AVAILABLE MODULES\033[0m"
+    echo -e "\033[94m(‾_‾) PETZE GUARD: AVAILABLE MODULES\033[0m"
     echo -e "\033[94m=======================================\033[0m\n"
     
     echo -e "\033[93mnetwork-admin\033[0m  - Unlocks network reconnaissance (nmap, arp, netdiscover)"
@@ -2062,7 +2062,7 @@ petze-listmod() {
 
 petze-activemod() {
     echo -e "\n\033[94m=======================================\033[0m"
-    echo -e "\033[94m⚡ PETZE GUARD: ACTIVE MODULES\033[0m"
+    echo -e "\033[94m(‾_‾) PETZE GUARD: ACTIVE MODULES\033[0m"
     echo -e "\033[94m=======================================\033[0m\n"
 
     if [ -d ~/.petze/modules ] && [ -n "$(find ~/.petze/modules -name '*.active' 2>/dev/null)" ]; then
@@ -2128,7 +2128,7 @@ petze-unwhitelist() {
 
 petze-status() {
     echo -e "\n\033[94m=======================================\033[0m"
-    echo -e "\033[94m🛡️  PETZE GUARD: STATUS\033[0m"
+    echo -e "\033[94m(‾_‾)  PETZE GUARD: STATUS\033[0m"
     echo -e "\033[94m=======================================\033[0m"
 
     if [ -f ~/.petze/.disabled ]; then
