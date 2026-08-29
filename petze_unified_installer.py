@@ -756,6 +756,12 @@ HTML_UI = r'''<!DOCTYPE html>
             text-transform: uppercase;
             letter-spacing: 0.14em;
         }
+        .layer-badge { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; padding: 2px 6px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+        .layer-cloud { background: rgba(59,130,246,.15); color: #60a5fa; border: 1px solid rgba(59,130,246,.25); }
+        .layer-deterministic { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.25); }
+        .layer-dpi { background: rgba(245,158,11,.15); color: #fbbf24; border: 1px solid rgba(245,158,11,.25); }
+        .layer-package { background: rgba(168,85,247,.15); color: #c084fc; border: 1px solid rgba(168,85,247,.25); }
+        .layer-approved { background: rgba(34,197,94,.12); color: #4ade80; border: 1px solid rgba(34,197,94,.2); }
         .rlhf-reason { display: block; margin-top: 6px; font-size: 12px; color: var(--text-muted); font-family: "Inter", sans-serif; text-transform: none; letter-spacing: 0; line-height: 1.5; }
         .rlhf-sent { font-family: "Fira Code", monospace; font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.14em; }
 
@@ -873,6 +879,18 @@ HTML_UI = r'''<!DOCTYPE html>
             if (tab) tab.classList.add("active");
         }
 
+        function getLayer(log) {
+            if (!log || log.verdict === "Approved") return { label: "approved", cls: "layer-approved" };
+            const r = (log.reason || "").toLowerCase();
+            if (r.includes("package") || r.includes("supply chain") || r.includes("typosquat"))
+                return { label: "pkg-guard", cls: "layer-package" };
+            if (r.includes("injection pattern") || r.includes("cmd-dpi") || r.includes("file content") || r.includes("urllib"))
+                return { label: "dpi", cls: "layer-dpi" };
+            if (r.includes("critical:") || r.includes("red zone") || r.includes("deterministic") || r.includes("/.ssh") || r.includes("/.aws"))
+                return { label: "deterministic", cls: "layer-deterministic" };
+            return { label: "cloud", cls: "layer-cloud" };
+        }
+
         function escapeHtml(text) {
             return (text || "").toString()
                 .replace(/&/g, "&amp;")
@@ -956,7 +974,20 @@ HTML_UI = r'''<!DOCTYPE html>
                     '</div>';
             }
 
-            let statsHtml = "";
+            // Layer breakdown
+            const layerCounts = {};
+            logs.filter(l => l.verdict === 'Blocked').forEach(l => {
+                const lyr = getLayer(l);
+                layerCounts[lyr.label] = (layerCounts[lyr.label] || 0) + 1;
+            });
+            const layerBadges = Object.entries(layerCounts).filter(([,v]) => v > 0)
+                .map(([k,v]) => {
+                    const cls = {cloud:'layer-cloud',deterministic:'layer-deterministic',dpi:'layer-dpi','pkg-guard':'layer-package'}[k] || 'layer-cloud';
+                    return '<span class="layer-badge ' + cls + '">' + v + ' ' + k + '</span>';
+                }).join(' ');
+            const layerLine = layerBadges ? '<div style="margin-bottom:8px">' + layerBadges + '</div>' : '';
+
+            let statsHtml = layerLine;
             if (s.approved) statsHtml += '<span class="stat-approved">' + s.approved + " ok</span>";
             if (s.blocked) statsHtml += '<span class="stat-blocked">' + s.blocked + " blocked</span>";
             if (s.intentChanges) statsHtml += '<span class="stat-intent">' + s.intentChanges + " shift</span>";
@@ -1055,7 +1086,7 @@ HTML_UI = r'''<!DOCTYPE html>
                 '<td><div class="rlhf-time">' + ts + '</div></td>' +
                 '<td><div class="rlhf-intent">' + escapeHtml(log.intent) + '</div></td>' +
                 '<td><div class="rlhf-cmd">' + escapeHtml(log.command) + '</div></td>' +
-                '<td><span class="' + verdictCls + '">' + escapeHtml(log.verdict) + '</span><span class="rlhf-reason">' + escapeHtml(log.reason) + '</span></td>' +
+                '<td>' + (() => { const lyr = getLayer(log); return '<span class="layer-badge ' + lyr.cls + '">' + lyr.label + '</span>'; })() + '<span class="' + verdictCls + '">' + escapeHtml(log.verdict) + '</span><span class="rlhf-reason">' + escapeHtml(log.reason) + '</span></td>' +
                 '<td id="cell-' + i + '" style="text-align:center;min-width:140px;">' + actionHtml + '</td>' +
             '</tr>';
         }
@@ -1972,34 +2003,40 @@ shell_injection += f'alias petze-start="{os.path.join(petze_dir, "petze-start")}
 # The Help & Whitelist Commands
 shell_injection += r"""
 petze-help() {
-    echo -e "\n\033[94m=======================================\033[0m"
-    echo -e "\033[94m🛡️  PETZE GUARD: COMMAND REFERENCE\033[0m"
-    echo -e "\033[94m=======================================\033[0m\n"
+    echo -e "\n\033[34m(\u203e_\u203e)\033[0m  \033[94mPETZE GUARD: COMMAND REFERENCE\033[0m\n"
 
     echo -e "\033[93mCore AI Launchers:\033[0m"
-    echo -e "  \033[92mopencode\033[0m      Launch OpenCode (Interactive Intent)"
-    echo -e "  \033[92mclaude\033[0m        Launch Claude Code (Interactive Intent)"
+    echo -e "  \033[92mopencode\033[0m      Launch OpenCode — intent wizard, file brief, or OFF to bypass"
+    echo -e "  \033[92mclaude\033[0m        Launch Claude Code — same wizard"
     echo -e "  \033[92mpetze-run\033[0m     Launch OpenCode with inline intent (e.g., petze-run 'Read only')"
-    echo -e "  \033[92mopencode\033[0m      Type your task, or 'file' to load intent from a brief in the current folder"
-    echo -e "  \033[92mpetze-claude\033[0m  Launch Claude with inline intent (e.g., petze-claude 'Read only')\n"
+    echo -e "  \033[92mpetze-claude\033[0m  Launch Claude with inline intent\n"
 
     echo -e "\033[93mSecurity & Access:\033[0m"
     echo -e "  \033[92mpetze-whitelist\033[0m <domain/path>  Add safe resources to bypass intent blocks"
-    echo -e "  \\033[92mpetze-unwhitelist\\033[0m <domain/path>  Remove a resource from the whitelist"
+    echo -e "  \033[92mpetze-unwhitelist\033[0m <domain/path>  Remove a resource from the whitelist"
     echo -e "  \033[92mpetze-elevate\033[0m                  Air-Gapped Sysadmin Mode (Root access)"
     echo -e "  \033[92mpetze-demote\033[0m                   Revoke Sysadmin Mode\n"
 
     echo -e "\033[93mExtensibility Modules:\033[0m"
     echo -e "  \033[92mpetze-addmod\033[0m <module>          Activate a privilege module (e.g., network-admin)"
     echo -e "  \033[92mpetze-rmmod\033[0m <module>           Deactivate a privilege module"
-    echo -e "  \033[92mpetze-listmod\033[0m                Show all available modules and descriptions"
-    echo -e "  \033[92mpetze-activemod\033[0m              Show currently active modules in this session\n"
+    echo -e "  \033[92mpetze-listmod\033[0m                  Show all available modules and descriptions"
+    echo -e "  \033[92mpetze-activemod\033[0m                Show currently active modules in this session\n"
+
+    echo -e "\033[93mConfiguration:\033[0m"
+    echo -e "  \033[92mpetze-setmodel\033[0m <model>         Switch the OpenCode model (e.g. hy3-free, big-pickle)"
+    echo -e "  \033[92mpetze-setmodel\033[0m                 Show current model\n"
+
+    echo -e "\033[93mThreat Intelligence:\033[0m"
+    echo -e "  \033[92mpetze-update\033[0m                   Show update status and last sync times"
+    echo -e "  \033[92mpetze-update osv\033[0m               Refresh package threat intelligence from OSV.dev\n"
 
     echo -e "\033[93mMonitoring & Management:\033[0m"
-    echo -e "  \\033[92mpetze-dash-t\\033[0m  Open the Terminal Dashboard (headless / SSH)"
-    echo -e "  \033[92mpetze-stop\033[0m    Kill the firewall and restore native, unprotected tool access"
+    echo -e "  \033[92mpetze-dash\033[0m    Open the SOC Dashboard (live feed, training, blocking stats)"
+    echo -e "  \033[92mpetze-dash-t\033[0m  Open the Terminal Dashboard (headless / SSH)"
+    echo -e "  \033[92mpetze-status\033[0m  Show firewall status, intent and active modules"
+    echo -e "  \033[92mpetze-stop\033[0m    Kill the firewall and restore native tool access"
     echo -e "  \033[92mpetze-start\033[0m   Re-engage the Zero-Trust firewall\n"
-    echo -e "  \\033[92mpetze-status\\033[0m Show firewall status, intent and active modules"
 }
 
 petze-listmod() {
