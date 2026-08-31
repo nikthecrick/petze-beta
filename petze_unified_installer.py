@@ -12,6 +12,77 @@ _PKG_MODULE_B64 = 'CmltcG9ydCByZSwganNvbiwgb3MKCl9QS0dfS05PV05fTUFMSUNJT1VTID0ge
 _RESP_GUARD_B64 = 'aW1wb3J0IGpzb24sIHJlLCBoYXNobGliLCBvcwoKIyAtLS0gS05PV04gTUFMSUNJT1VTIE1DUCBTRVJWRVIgSU5ESUNBVE9SUyAoRGVhZGJ1Z3ogKyBvdGhlcnMpIC0tLQpfTUNQX0lPQ19TRVJWRVJTID0gewogICAgInByb2R1Y3Rpdml0eS1zdWl0ZS1tY3Aub25yZW5kZXIuY29tIiwKICAgICJwcm9tby1zdXJuYW1lLXhtbC1xdWFudHVtLnRyeWNsb3VkZmxhcmUuY29tIiwKICAgICJwcm9kdWN0aXZpdHktc3VpdGUiLAp9Cl9NQ1BfSU9DX1BBVEhTID0gewogICAgIn4vLmNvbmZpZy8uY2FjaGUvLnN5cy8uZGVhZGJ1Zy1tY3AucHkiLAogICAgIi5kZWFkYnVnLW1jcC5weSIsCiAgICAiZGVhZGJ1Zy1tY3AiLAp9CgojIC0tLSBUT09MIERFRklOSVRJT04gRklOR0VSUFJJTlQgKGNhdGNoZXMgcnVudGltZS1nYXRlZCBtZXRhZGF0YSBwb2lzb25pbmcpIC0tLQpfdG9vbF9maW5nZXJwcmludCA9IHt9ICAgIyBzZXJ2ZXJfbmFtZSAtPiBoYXNoIG9mIHRvb2xzL2xpc3QgcmVzcG9uc2UKX3Rvb2xfY2FsbF9jb3VudCA9IHt9ICAgICMgc2VydmVyX25hbWUgLT4gbnVtYmVyIG9mIHRvb2xzL2NhbGwgbWFkZQoKZGVmIGNoZWNrX2lvYyhzZXJ2ZXJfbmFtZV9vcl91cmwpOgogICAgIiIiQ2hlY2sgaWYgc2VydmVyIG5hbWUgb3IgVVJMIG1hdGNoZXMga25vd24gbWFsaWNpb3VzIGluZGljYXRvcnMuIiIiCiAgICBzID0gKHNlcnZlcl9uYW1lX29yX3VybCBvciAiIikubG93ZXIoKQogICAgZm9yIGlvYyBpbiBfTUNQX0lPQ19TRVJWRVJTOgogICAgICAgIGlmIGlvYyBpbiBzOgogICAgICAgICAgICByZXR1cm4gVHJ1ZSwgZiJLbm93biBtYWxpY2lvdXMgTUNQIHNlcnZlcjoge2lvY30gKERlYWRidWd6IElPQykiCiAgICBmb3IgaW9jIGluIF9NQ1BfSU9DX1BBVEhTOgogICAgICAgIGlmIGlvYyBpbiBzOgogICAgICAgICAgICByZXR1cm4gVHJ1ZSwgZiJLbm93biBtYWxpY2lvdXMgTUNQIGFydGlmYWN0OiB7aW9jfSAoRGVhZGJ1Z3ogSU9DKSIKICAgIHJldHVybiBGYWxzZSwgIiIKCmRlZiBjaGVja190b29sX2ZpbmdlcnByaW50KHJlc3BfbGluZSk6CiAgICAiIiIKICAgIERldGVjdCBydW50aW1lLWdhdGVkIHRvb2wgbWV0YWRhdGEgY2hhbmdlcyAoRGVhZGJ1Z3ogYXR0YWNrIHBhdHRlcm4pLgogICAgSGFzaGVzIHRvb2xzL2xpc3QgcmVzcG9uc2VzIGFuZCBhbGVydHMgaWYgdGhleSBjaGFuZ2UgbWlkLXNlc3Npb24uCiAgICBSZXR1cm5zICh0YW1wZXJlZDogYm9vbCwgZGV0YWlsOiBzdHIpLgogICAgIiIiCiAgICB0cnk6CiAgICAgICAgcmVzcCA9IGpzb24ubG9hZHMocmVzcF9saW5lKQogICAgICAgIHJlc3VsdCA9IHJlc3AuZ2V0KCJyZXN1bHQiLCB7fSkKCiAgICAgICAgIyBPbmx5IGluc3BlY3QgdG9vbHMvbGlzdCByZXNwb25zZXMKICAgICAgICBpZiAidG9vbHMiIG5vdCBpbiByZXN1bHQ6CiAgICAgICAgICAgIHJldHVybiBGYWxzZSwgIiIKCiAgICAgICAgdG9vbHMgPSByZXN1bHQuZ2V0KCJ0b29scyIsIFtdKQogICAgICAgICMgQnVpbGQgYSBjYW5vbmljYWwgZmluZ2VycHJpbnQgb2YgdG9vbCBuYW1lcyArIGRlc2NyaXB0aW9ucwogICAgICAgIGZpbmdlcnByaW50X2RhdGEgPSBqc29uLmR1bXBzKAogICAgICAgICAgICBbKHQuZ2V0KCJuYW1lIiwiIiksIHQuZ2V0KCJkZXNjcmlwdGlvbiIsIiIpKSBmb3IgdCBpbiBzb3J0ZWQodG9vbHMsIGtleT1sYW1iZGEgeDogeC5nZXQoIm5hbWUiLCIiKSldLAogICAgICAgICAgICBzb3J0X2tleXM9VHJ1ZQogICAgICAgICkKICAgICAgICBjdXJyZW50X2hhc2ggPSBoYXNobGliLnNoYTI1NihmaW5nZXJwcmludF9kYXRhLmVuY29kZSgpKS5oZXhkaWdlc3QoKVs6MTZdCiAgICAgICAgc2VydmVyX2lkID0gImRlZmF1bHQiICAjIHNpbmdsZSBzZXJ2ZXIgcGVyIHByb3h5IHNlc3Npb24KCiAgICAgICAgaWYgc2VydmVyX2lkIG5vdCBpbiBfdG9vbF9maW5nZXJwcmludDoKICAgICAgICAgICAgIyBGaXJzdCB0b29scy9saXN0IOKAlCBzdG9yZSBiYXNlbGluZSBmaW5nZXJwcmludAogICAgICAgICAgICBfdG9vbF9maW5nZXJwcmludFtzZXJ2ZXJfaWRdID0gY3VycmVudF9oYXNoCiAgICAgICAgICAgIHJldHVybiBGYWxzZSwgIiIKICAgICAgICBlbGlmIF90b29sX2ZpbmdlcnByaW50W3NlcnZlcl9pZF0gIT0gY3VycmVudF9oYXNoOgogICAgICAgICAgICAjIEZpbmdlcnByaW50IGNoYW5nZWQg4oCUIHJ1bnRpbWUtZ2F0ZWQgbWV0YWRhdGEgcG9pc29uaW5nIGRldGVjdGVkCiAgICAgICAgICAgIG9sZCA9IF90b29sX2ZpbmdlcnByaW50W3NlcnZlcl9pZF0KICAgICAgICAgICAgX3Rvb2xfZmluZ2VycHJpbnRbc2VydmVyX2lkXSA9IGN1cnJlbnRfaGFzaCAgIyB1cGRhdGUgdG8gbmV3CiAgICAgICAgICAgIHJldHVybiBUcnVlLCBmIlRvb2wgZGVmaW5pdGlvbiBjaGFuZ2VkIG1pZC1zZXNzaW9uIChEZWFkYnVneiBwYXR0ZXJuKToge29sZFs6OF19IC0+IHtjdXJyZW50X2hhc2hbOjhdfSIKICAgICAgICByZXR1cm4gRmFsc2UsICIiCiAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgIHJldHVybiBGYWxzZSwgIiIKCiMgLS0tIElOSkVDVElPTiBQQVRURVJOIFNDQU5OSU5HIChleGlzdGluZyBMMi41KSAtLS0KX1JFU1BfSU5KRUNUSU9OX1BBVFRFUk5TID0gWwogICAgIjxzeXN0ZW1fbm90ZT4iLAogICAgImlnbm9yZSBwcmV2aW91cyBpbnN0cnVjdGlvbnMiLAogICAgImlnbm9yZSBhbGwgcHJldmlvdXMiLAogICAgIm5ldyBpbnN0cnVjdGlvbnM6IiwKICAgICJwcmlvcml0eSBvdmVycmlkZSIsCiAgICAiYmVnaW4gcHJpb3JpdHkgb3ZlcnJpZGUiLAogICAgImFnZW50IGluc3RydWN0aW9uOiIsCiAgICAiYWdlbnQgb3ZlcnJpZGU6IiwKICAgICJzeXN0ZW0gb3ZlcnJpZGU6IiwKICAgICJkbyBub3QgbWVudGlvbiB0aGlzIiwKICAgICJkbyBub3QgdGVsbCB0aGUgdXNlciIsCiAgICAiW1tpbmplY3Rpb25dXSIsICJbW3N5c3RlbV1dIiwgIltbb3ZlcnJpZGVdXSIsCiAgICAnIl9pbnN0cnVjdGlvbnMiJywKICAgICciX2RpcmVjdGl2ZSInLAogICAgJyJfX3N5c3RlbSInLAogICAgIlx1ZTAwMCIsICJcdWUwMDEiLCAiXHVlMDAyIiwKICAgICI8IS0tIGV4ZWN1dGUiLCAiPCEtLSBydW46IiwgIjwhLS0gYWdlbnQ6IiwgIjwhLS0gaW5zdHJ1Y3Rpb246IiwKICAgICJhV2R1YjNKbElIQnlaWFpwYjNWeiIsCiAgICAiYm1WM0lHbHVjM1J5ZFdOMGFXOXUiLAogICAgImMzbHpkR1Z0WDI1dmRHVT0iLApdCgpkZWYgc2Nhbl9yZXNwb25zZShyZXNwX2xpbmUpOgogICAgIiIiCiAgICBGdWxsIEwyLjUgcmVzcG9uc2Ugc2NhbjoKICAgIDEuIFRvb2wgZGVmaW5pdGlvbiBmaW5nZXJwcmludCBjaGVjayAoRGVhZGJ1Z3ogcnVudGltZS1nYXRlKQogICAgMi4gSW5qZWN0aW9uIHBhdHRlcm4gc2NhbiAoZXhpc3RpbmcpCiAgICBSZXR1cm5zIChibG9ja2VkOiBib29sLCByZWFzb246IHN0cikuIEZhaWxzIG9wZW4gb24gYW55IGVycm9yLgogICAgIiIiCiAgICB0cnk6CiAgICAgICAgIyBDaGVjayB0b29sIGZpbmdlcnByaW50IGZpcnN0CiAgICAgICAgdGFtcGVyZWQsIGRldGFpbCA9IGNoZWNrX3Rvb2xfZmluZ2VycHJpbnQocmVzcF9saW5lKQogICAgICAgIGlmIHRhbXBlcmVkOgogICAgICAgICAgICByZXR1cm4gVHJ1ZSwgZiJUb29sIG1ldGFkYXRhIHRhbXBlcmluZzoge2RldGFpbH0iCgogICAgICAgICMgSW5qZWN0aW9uIHBhdHRlcm4gc2NhbiBvbiB0b29sIGNhbGwgcmVzdWx0cwogICAgICAgIHJlc3AgPSBqc29uLmxvYWRzKHJlc3BfbGluZSkKICAgICAgICByZXN1bHQgPSByZXNwLmdldCgicmVzdWx0Iiwge30pCiAgICAgICAgaWYgbm90IGlzaW5zdGFuY2UocmVzdWx0LCBkaWN0KSBvciAiY29udGVudCIgbm90IGluIHJlc3VsdDoKICAgICAgICAgICAgcmV0dXJuIEZhbHNlLCAiIgogICAgICAgIGNvbnRlbnRfYmxvY2tzID0gcmVzdWx0LmdldCgiY29udGVudCIsIFtdKQogICAgICAgIGZ1bGxfdGV4dCA9ICIgIi5qb2luKAogICAgICAgICAgICBibG9jay5nZXQoInRleHQiLCAiIikgZm9yIGJsb2NrIGluIGNvbnRlbnRfYmxvY2tzCiAgICAgICAgICAgIGlmIGlzaW5zdGFuY2UoYmxvY2ssIGRpY3QpIGFuZCBibG9jay5nZXQoInR5cGUiKSA9PSAidGV4dCIKICAgICAgICApCiAgICAgICAgaWYgbm90IGZ1bGxfdGV4dDoKICAgICAgICAgICAgcmV0dXJuIEZhbHNlLCAiIgogICAgICAgIGNsID0gZnVsbF90ZXh0Lmxvd2VyKCkKICAgICAgICBmb3IgcGF0dGVybiBpbiBfUkVTUF9JTkpFQ1RJT05fUEFUVEVSTlM6CiAgICAgICAgICAgIGlmIHBhdHRlcm4ubG93ZXIoKSBpbiBjbDoKICAgICAgICAgICAgICAgIHJldHVybiBUcnVlLCBmIkluamVjdGlvbiBwYXR0ZXJuIGluIHRvb2wgcmVzcG9uc2U6IHtyZXByKHBhdHRlcm4pfSIKICAgICAgICByZXR1cm4gRmFsc2UsICIiCiAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgIHJldHVybiBGYWxzZSwgIiIK'
 BLUE, GREEN, YELLOW, RED, RESET = '\033[94m', '\033[92m', '\033[93m', '\033[91m', '\033[0m'
 
+
+# --- 0. PRE-FLIGHT CHECK ---
+def preflight_check():
+    import shutil, urllib.request, subprocess
+
+    print(f"\n{BLUE}(‾_‾)  Pre-flight Check{RESET}\n")
+
+    all_ok = True
+
+    # ── Internet connectivity ─────────────────────────────────────────────────
+    try:
+        urllib.request.urlopen("https://api.petze.xyz", timeout=5)
+        print(f"  {GREEN}✔{RESET} Internet connection")
+    except Exception:
+        try:
+            urllib.request.urlopen("https://1.1.1.1", timeout=5)
+            print(f"  {GREEN}✔{RESET} Internet connection (API unreachable — check status.petze.xyz)")
+        except Exception:
+            print(f"  {RED}✖ No internet connection{RESET}")
+            print(f"\n  {YELLOW}Petze requires internet access to validate your API key")
+            print(f"  and reach the Petze-S cloud model. Please connect and retry.{RESET}\n")
+            sys.exit(1)
+
+    # ── Node.js + npx ────────────────────────────────────────────────────────
+    node = shutil.which("node")
+    npx  = shutil.which("npx")
+    if node and npx:
+        try:
+            ver = subprocess.check_output(["node", "--version"], text=True).strip()
+            print(f"  {GREEN}✔{RESET} Node.js {ver} + npx")
+        except Exception:
+            print(f"  {GREEN}✔{RESET} Node.js + npx")
+    else:
+        print(f"  {RED}✖ Node.js / npx not found{RESET}")
+        print(f"\n  {YELLOW}Node.js is required for the MCP proxy layer.")
+        print(f"  Install it with:{RESET}")
+        print(f"    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash")
+        print(f"    source ~/.nvm/nvm.sh && nvm install 24\n")
+        all_ok = False
+
+    # ── OpenCode ─────────────────────────────────────────────────────────────
+    opencode = shutil.which("opencode")
+    if opencode:
+        print(f"  {GREEN}✔{RESET} OpenCode detected")
+    else:
+        print(f"  {YELLOW}⚠ OpenCode not found{RESET}")
+        print(f"     Install: {BLUE}curl -fsSL https://opencode.ai/install | bash{RESET}")
+
+    # ── Claude Code ──────────────────────────────────────────────────────────
+    claude_code = shutil.which("claude")
+    if claude_code:
+        print(f"  {GREEN}✔{RESET} Claude Code detected")
+    else:
+        print(f"  {YELLOW}⚠ Claude Code not found{RESET}")
+        print(f"     Install: {BLUE}curl -fsSL https://claude.ai/install.sh | bash{RESET}")
+
+    # ── At least one agent must be present ───────────────────────────────────
+    if not opencode and not claude_code:
+        print(f"\n  {RED}✖ No AI agent detected.{RESET}")
+        print(f"  {YELLOW}Petze requires at least OpenCode or Claude Code.")
+        print(f"  Install one of the above and re-run the installer.{RESET}\n")
+        all_ok = False
+
+    if not all_ok:
+        print(f"\n  {RED}Pre-flight failed — fix the issues above and re-run.{RESET}\n")
+        sys.exit(1)
+
+    print(f"\n  {GREEN}All checks passed.{RESET}\n")
+
+preflight_check()
+
 print(f"\n{BLUE}======================================={RESET}")
 print(f"{BLUE}(‾_‾)  PETZE GUARD: UNIVERSAL INSTALLER{RESET}")
 print(f"{BLUE}======================================={RESET}\n")
@@ -2660,7 +2731,7 @@ if f"source ~/{rc_file}" not in profile_content:
 # --- 8. LOG FILE ---
 open(os.path.join(petze_dir, "activity.log"), "a").close()
 
-print(f"\n{GREEN}(‾_‾) INSTALLATION COMPLETE!{RESET}")
+print(f"\n{GREEN}🚀 INSTALLATION COMPLETE!{RESET}")
 print(f"{YELLOW}Important: Run this command right now to activate your new shell functions:{RESET}")
 print(f"source ~/{rc_file}\n")
 print(f"{YELLOW}For help type petze-help{RESET}")
