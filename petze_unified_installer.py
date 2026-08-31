@@ -68,18 +68,57 @@ def preflight_check():
         print(f"  {YELLOW}⚠ Claude Code not found{RESET}")
         print(f"     Install: {BLUE}curl -fsSL https://claude.ai/install.sh | bash{RESET}")
 
-    # ── At least one agent must be present ───────────────────────────────────
+    # ── Neither detected — offer to install ──────────────────────────────────
     if not opencode and not claude_code:
         print(f"\n  {RED}✖ No AI agent detected.{RESET}")
-        print(f"  {YELLOW}Petze requires at least OpenCode or Claude Code.")
-        print(f"  Install one of the above and re-run the installer.{RESET}\n")
-        all_ok = False
+        print(f"  {YELLOW}Petze requires at least OpenCode or Claude Code.{RESET}\n")
+        print(f"  Which would you like to install?")
+        print(f"  {BLUE}[1]{RESET} OpenCode  (recommended)")
+        print(f"  {BLUE}[2]{RESET} Claude Code")
+        print(f"  {BLUE}[3]{RESET} Both")
+        print(f"  {BLUE}[q]{RESET} Quit and install manually\n")
+        choice = input(f"  Choice [1/2/3/q]: ").strip().lower()
+        if choice in ("1", "3"):
+            print(f"\n  Installing OpenCode...")
+            ret = os.system("curl -fsSL https://opencode.ai/install | bash")
+            if ret == 0:
+                opencode = shutil.which("opencode")
+                if opencode:
+                    print(f"  {GREEN}✔ OpenCode installed{RESET}")
+                else:
+                    print(f"  {YELLOW}⚠ OpenCode installed — restart terminal to activate{RESET}")
+            else:
+                print(f"  {RED}✖ OpenCode installation failed — install manually and re-run{RESET}")
+                sys.exit(1)
+        if choice in ("2", "3"):
+            print(f"\n  Installing Claude Code...")
+            ret = os.system("curl -fsSL https://claude.ai/install.sh | bash")
+            if ret == 0:
+                claude_code = shutil.which("claude")
+                if claude_code:
+                    print(f"  {GREEN}✔ Claude Code installed{RESET}")
+                else:
+                    print(f"  {YELLOW}⚠ Claude Code installed — restart terminal to activate{RESET}")
+            else:
+                print(f"  {RED}✖ Claude Code installation failed — install manually and re-run{RESET}")
+                sys.exit(1)
+        if choice == "q":
+            print(f"\n  Install an agent and re-run: python3 petze_unified_installer.py\n")
+            sys.exit(0)
+        if choice not in ("1", "2", "3", "q"):
+            print(f"  {RED}Invalid choice — exiting.{RESET}")
+            sys.exit(1)
+        # Re-check after install
+        if not shutil.which("opencode") and not shutil.which("claude"):
+            print(f"\n  {YELLOW}No agent detected in PATH yet.")
+            print(f"  Run: source ~/.zshrc && python3 petze_unified_installer.py{RESET}\n")
+            sys.exit(1)
 
     if not all_ok:
         print(f"\n  {RED}Pre-flight failed — fix the issues above and re-run.{RESET}\n")
         sys.exit(1)
 
-    print(f"\n  {GREEN}All checks passed.{RESET}\n")
+    print(f"\n  {GREEN}All checks passed — continuing installation.{RESET}\n")
 
 preflight_check()
 
