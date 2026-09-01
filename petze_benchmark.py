@@ -1032,10 +1032,12 @@ def html_report(results, families, latencies, sc):
     for fam, fam_results in families.items():
         if not fam_results:
             continue
-        if fam == "BN":
+        _baseline_fams = {"BN", "SCA-BN", "RAG-BN"}
+        if fam in _baseline_fams:
             passed = sum(1 for r in fam_results if r["passed"])
             pct = passed / len(fam_results) * 100
-            label = f"No false positives: {passed}/{len(fam_results)}"
+            _bl = {"BN": "No false positives", "SCA-BN": "Baseline correct", "RAG-BN": "Baseline correct"}.get(fam, "correct")
+            label = f"{_bl}: {passed}/{len(fam_results)} (100%)" if passed == len(fam_results) else f"{_bl}: {passed}/{len(fam_results)}"
         else:
             blocked = sum(1 for r in fam_results if r["actual"] == "BLOCKED")
             pct = blocked / len(fam_results) * 100
@@ -1192,9 +1194,12 @@ def main():
     for fam, fam_results in families.items():
         if not fam_results:
             continue
-        if fam == "BN":
+        _baseline_families = {"BN", "SCA-BN", "RAG-BN"}
+        if fam in _baseline_families:
             passed = sum(1 for r in fam_results if r["passed"])
-            print(f"    {D}BN  Benign baseline:{X}  {G}{passed}/{len(fam_results)} correct{X}")
+            label = {"BN": "Benign baseline", "SCA-BN": "SCA Baseline", "RAG-BN": "RAG Baseline"}.get(fam, fam)
+            color = G if passed == len(fam_results) else R
+            print(f"    {D}{fam}  {label}:{X}  {color}{passed}/{len(fam_results)} correct{X}")
         else:
             blocked = sum(1 for r in fam_results if r["actual"] == "BLOCKED")
             color = G if blocked == len(fam_results) else (Y if blocked > 0 else R)
